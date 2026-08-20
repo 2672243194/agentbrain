@@ -3,9 +3,11 @@ from __future__ import annotations
 import datetime as dt
 import re
 from pathlib import Path
+from typing import Iterator
 
 from .config import Config
 from .frontmatter import dump, parse
+from .locking import atomic_write, vault_lock
 from .models import Lesson
 
 _DATE = "%Y-%m-%d"
@@ -54,6 +56,12 @@ class Vault:
         except ValueError:
             return str(path)
 
+    def locked(self) -> "Iterator[None]":
+        """Hold the vault write lock; nest via re-entrancy is NOT supported —
+        public write methods already lock internally, use this only to wrap
+        multi-step transactions (e.g. apply_proposal)."""
+        return vault_lock(self.root)
+
     # --- lessons ---
 
     def lessons(self, include_superseded: bool = False) -> list[Lesson]:
@@ -74,7 +82,13 @@ class Vault:
             text = path.read_text(encoding="utf-8")
         except OSError:
             return None
+        if not text.startswith("---"):
+            return None  # not a lesson (e.g. a stray README.md)
         meta, body = parse(text)
+        if not any(
+            k in meta for k in ("case_id", "source_summary", "tags", "use_count", "created_at")
+        ):
+            return None  # frontmatter carries no lesson fields — not ours, skip
         return Lesson(
             lesson_id=path.stem,
             case_id=str(meta.get("case_id", path.stem)),
@@ -96,6 +110,12 @@ class Vault:
         return self.load_lesson(p) if p.is_file() else None
 
     def save(self, lesson: Lesson, action: str | None = None) -> None:
+        with self.locked():
+            self._save_locked(lesson, action, rebuild=True)
+
+    def _save_locked(
+        self, lesson: Lesson, action: str | None = None, rebuild: bool = True
+    ) -> None:
         meta = {
             "case_id": lesson.case_id,
             "tags": lesson.tags,
@@ -110,10 +130,11 @@ class Vault:
         }
         lesson.path = lesson.path or self.learnings_dir / f"{lesson.lesson_id}.md"
         lesson.path.parent.mkdir(parents=True, exist_ok=True)
-        lesson.path.write_text(dump(meta, lesson.content), encoding="utf-8")
+        atomic_write(lesson.path, dump(meta, lesson.content))
         if action:
-            self.append_log(action, lesson.lesson_id, lesson.tags)
-        self.rebuild_index()
+            self._append_log_locked(action, lesson.lesson_id, lesson.tags)
+        if rebuild:
+            self._rebuild_index_locked()
 
     def new_lesson(
         self,
@@ -149,16 +170,24 @@ class Vault:
         return f"{prefix}{n + 1:02d}"
 
     def bump_use(self, lesson_ids: list[str]) -> None:
-        for lesson_id in lesson_ids:
-            lesson = self.get(lesson_id)
-            if lesson is None:
-                continue
-            lesson.use_count += 1
-            self.save(lesson)
+        if not lesson_ids:
+            return
+        with self.locked():
+            for lesson_id in lesson_ids:
+                lesson = self.get(lesson_id)
+                if lesson is None:
+                    continue
+                lesson.use_count += 1
+                self._save_locked(lesson, rebuild=False)
+            self._rebuild_index_locked()
 
     # --- index ---
 
     def rebuild_index(self, lessons: list[Lesson] | None = None) -> None:
+        with self.locked():
+            self._rebuild_index_locked(lessons)
+
+    def _rebuild_index_locked(self, lessons: list[Lesson] | None = None) -> None:
         lessons = lessons if lessons is not None else self.lessons(include_superseded=True)
         lines = [
             "# Case-Learnings Index",
@@ -172,17 +201,21 @@ class Vault:
             summary = l.source_summary.replace("|", "/")
             if l.superseded_by:
                 summary = f"{summary} (→ {l.superseded_by})"
-            tags = ", ".join(l.tags).replace("|", "/")
+            tags = ", ".join(l.tags).replace("|", "/") or "-"
             lines.append(
                 f"| {l.lesson_id} | {summary} | {tags} | {l.case_id} "
                 f"| {l.last_verified_at} | {l.use_count} |"
             )
         self.index_md.parent.mkdir(parents=True, exist_ok=True)
-        self.index_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        atomic_write(self.index_md, "\n".join(lines) + "\n")
 
     # --- log ---
 
     def append_log(self, action: str, obj: str, tags: list[str] | None = None) -> None:
+        with self.locked():
+            self._append_log_locked(action, obj, tags)
+
+    def _append_log_locked(self, action: str, obj: str, tags: list[str] | None = None) -> None:
         today = dt.date.today().strftime(_DATE)
         tag_s = f" | tags:{','.join(tags)}" if tags else ""
         self.log_md.parent.mkdir(parents=True, exist_ok=True)

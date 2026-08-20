@@ -129,8 +129,24 @@ executes them via `agentbrain apply`.
 - **Self-maintenance signals**: every query hit increments `use_count`; `log.md`
   feeds `memory_distill` pattern analysis; `lint` refreshes nothing silently —
   every mutation of history goes through human-approved proposals.
-- **Single-user, local-first**: no server daemon, no lock files; safe for one human
-  driving several agents on one machine.
+- **Single-user, local-first**: no daemon, no ports; concurrent writes from several
+  agents are serialized by a transient `.vault.lock` (auto-cleaned, stale-reclaimed
+  after 60 s), and all file writes are atomic (temp + rename) so readers never see
+  torn files.
+
+## Changelog
+
+- **0.3.0** — Concurrency & robustness: cross-process/thread vault write lock
+  (`.vault.lock`, re-entrant, stale-reclaim), atomic writes (temp + rename),
+  `apply` is now a single transaction; query no longer rebuilds the index once per
+  hit (one rebuild per query); stray non-lesson `.md` files in `Learnings/` are
+  ignored; `confidence` clamped to [0,1]; unknown `mode` falls back to `index`;
+  same-second suggestions no longer overwrite each other. 54 tests.
+- **0.2.0** — Owner profile layer (`memory_profile` / `memory_suggest` + MCP
+  resources), lint/distill proposals with machine-readable directive blocks,
+  `agentbrain apply` with cycle/self-supersede/dangling checks.
+- **0.1.0** — Initial MVP: vault + frontmatter + CJK-aware BM25 retrieval,
+  MCP server (query/ingest/lint/distill) + CLI, scaffold templates.
 
 ## Roadmap
 

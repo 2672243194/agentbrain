@@ -85,14 +85,19 @@ def apply_proposal(vault: Vault, proposal: str | Path) -> str:
             "Refused — nothing applied:\n" + "\n".join(f"- {e}" for e in errors)
         )
 
-    for old, new in unique:
-        lesson = vault.get(old)
-        lesson.superseded_by = new
-        vault.save(lesson)
-
-    renamed = p.with_name(p.stem + ".applied.md")
-    p.rename(renamed)
-    vault.append_log("apply", f"{p.name} | superseded:{len(unique)}")
+    with vault.locked():  # validate + write as one transaction
+        for old, new in unique:
+            lesson = vault.get(old)
+            if lesson is None or lesson.superseded_by:
+                raise ProposalError(
+                    f"Vault changed while applying ({old}); nothing was applied."
+                )
+            lesson.superseded_by = new
+            vault._save_locked(lesson, rebuild=False)
+        vault._rebuild_index_locked()
+        renamed = p.with_name(p.stem + ".applied.md")
+        p.rename(renamed)
+        vault._append_log_locked("apply", f"{p.name} | superseded:{len(unique)}")
     return "\n".join(
         [f"Applied {len(unique)} directive(s) from {vault.relpath(p)}:"]
         + [f"- {old} → {new} (superseded)" for old, new in unique]

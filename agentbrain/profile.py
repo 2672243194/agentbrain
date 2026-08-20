@@ -45,6 +45,10 @@ class Profile:
         stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
         self.suggestions_dir.mkdir(parents=True, exist_ok=True)
         path = self.suggestions_dir / f"{stamp}-{slug}.md"
+        n = 2
+        while path.exists():  # same-second suggestions must not overwrite each other
+            path = self.suggestions_dir / f"{stamp}-{slug}-{n}.md"
+            n += 1
         path.write_text(
             "---\n"
             f"title: {title.strip()}\n"

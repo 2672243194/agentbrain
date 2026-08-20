@@ -51,6 +51,9 @@ def _jaccard(a: set, b: set) -> float:
     return len(a & b) / len(a | b)
 
 
+_QUERY_MODES = ("index", "full")
+
+
 def memory_query(
     query: str,
     top_k: int = 5,
@@ -62,6 +65,8 @@ def memory_query(
     except VaultNotInitialized as e:
         return str(e)
 
+    if mode not in _QUERY_MODES:
+        mode = "index"
     ranked = search_lessons(v.lessons(), query)
     hits = ranked[: max(1, top_k)]
     if not hits:
@@ -102,6 +107,7 @@ def memory_ingest(
 
     tags = _normalize_tags(tags)
     case_id = _clean_case_id(case_id)
+    confidence = min(1.0, max(0.0, confidence))
     lesson_obj = v.new_lesson(
         case_id=case_id,
         source_summary=(source_summary or "").strip() or _oneline(lesson, 60),
