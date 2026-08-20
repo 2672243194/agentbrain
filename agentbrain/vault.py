@@ -98,7 +98,7 @@ class Vault:
             created_at=str(meta.get("created_at", "")),
             last_verified_at=str(meta.get("last_verified_at", "")),
             valid_until=str(meta.get("valid_until", "") or ""),
-            confidence=float(meta.get("confidence") or 0.8),
+            confidence=float(meta.get("confidence") if meta.get("confidence") is not None else 0.8),
             verified=bool(meta.get("verified", True)),
             superseded_by=str(meta.get("superseded_by", "") or ""),
             use_count=int(meta.get("use_count") or 0),

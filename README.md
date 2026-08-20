@@ -29,7 +29,7 @@ agentbrain/                    # vault root (git-friendly, Obsidian-friendly)
 │  ├─ Index.md                   # auto-generated lesson index (retrieval layer 1)
 │  ├─ log.md                     # append-only audit log
 │  ├─ Learnings/                 # one lesson per file, YAML frontmatter
-│  │  └─ case-001-lesson-01.md
+│  │  └─ case-001-lesson-01.md   # 文件名 = {case_id}-lesson-{NN}，自动生成
 │  └─ _consolidations/           # merge/promotion proposals (human approval)
 └─ Agent-Profile/
    ├─ Immutable/                 # owner preferences & environment (agent read-only)
@@ -136,6 +136,12 @@ executes them via `agentbrain apply`.
 
 ## Changelog
 
+- **0.3.1** — Data-integrity fixes: concurrent same-case ingests no longer overwrite
+  each other (lesson-id allocation moved inside the vault lock); `confidence: 0.0`
+  round-trips correctly (was silently coerced to 0.8); lint/distill proposals are
+  written atomically under the lock with collision-free names; merge proposals now
+  keep the more-used lesson as the keeper; duplicate detection pre-tokenizes (O(n²)
+  without re-tokenizing per pair). Session wrap-up rule added to AGENTS.md. 59 tests.
 - **0.3.0** — Concurrency & robustness: cross-process/thread vault write lock
   (`.vault.lock`, re-entrant, stale-reclaim), atomic writes (temp + rename),
   `apply` is now a single transaction; query no longer rebuilds the index once per

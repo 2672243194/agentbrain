@@ -3,8 +3,10 @@ from __future__ import annotations
 import datetime as dt
 import re
 from collections import Counter
+from pathlib import Path
 
 from .config import Config
+from .locking import atomic_write
 from .models import Lesson
 from .profile import Profile
 from .retrieval import _days_since, search_lessons, tokenize
@@ -43,6 +45,17 @@ def _normalize_tags(tags) -> list[str]:
 
 def _stamp() -> str:
     return dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def _next_proposal_path(v: Vault, kind: str) -> Path:
+    v.consolidations_dir.mkdir(parents=True, exist_ok=True)
+    stamp = _stamp()
+    path = v.consolidations_dir / f"{kind}-{stamp}.md"
+    n = 2
+    while path.exists():  # same-second runs must not clobber each other
+        path = v.consolidations_dir / f"{kind}-{stamp}-{n}.md"
+        n += 1
+    return path
 
 
 def _jaccard(a: set, b: set) -> float:
@@ -108,14 +121,16 @@ def memory_ingest(
     tags = _normalize_tags(tags)
     case_id = _clean_case_id(case_id)
     confidence = min(1.0, max(0.0, confidence))
-    lesson_obj = v.new_lesson(
-        case_id=case_id,
-        source_summary=(source_summary or "").strip() or _oneline(lesson, 60),
-        content=lesson.strip(),
-        tags=tags,
-        confidence=confidence,
-    )
-    v.save(lesson_obj, action="ingest")
+    with v.locked():  # id allocation + write must be atomic: parallel ingests of
+        # the same case would otherwise draw the same lesson_id and overwrite
+        lesson_obj = v.new_lesson(
+            case_id=case_id,
+            source_summary=(source_summary or "").strip() or _oneline(lesson, 60),
+            content=lesson.strip(),
+            tags=tags,
+            confidence=confidence,
+        )
+        v._save_locked(lesson_obj, action="ingest")
     return (
         f"Saved {lesson_obj.lesson_id} → {v.relpath(lesson_obj.path)}\n"
         f"tags: {', '.join(tags) or '-'} · confidence {confidence} · index & log updated"
@@ -128,6 +143,14 @@ def _similar(a: Lesson, b: Lesson) -> bool:
     tags_sim = _jaccard(set(a.tags), set(b.tags))
     content_sim = _jaccard(set(tokenize(a.content)), set(tokenize(b.content)))
     return tags_sim >= 0.5 and content_sim >= 0.4
+
+
+def _similar_pre(
+    sa: set, ta: set, ca: set, sb: set, tb: set, cb: set
+) -> bool:
+    if _jaccard(sa, sb) >= 0.6:
+        return True
+    return _jaccard(ta, tb) >= 0.5 and _jaccard(ca, cb) >= 0.4
 
 
 def memory_lint(scope: str = "all", vault: Vault | None = None) -> str:
@@ -148,18 +171,25 @@ def memory_lint(scope: str = "all", vault: Vault | None = None) -> str:
     by_id = {l.lesson_id: l for l in lessons}
     active = [l for l in lessons if not l.superseded_by]
 
-    for i, a in enumerate(active):
-        for b in active[i + 1 :]:
-            if _similar(a, b):
+    pre = [
+        (l, set(tokenize(l.source_summary)), set(l.tags), set(tokenize(l.content)))
+        for l in active
+    ]
+    for i, (a, sa, ta, ca) in enumerate(pre):
+        for b, sb, tb, cb in pre[i + 1 :]:
+            if _similar_pre(sa, ta, ca, sb, tb, cb):
                 findings.append(f"DUPLICATE {a.lesson_id} ≈ {b.lesson_id}")
+                keeper, gone = (
+                    (a, b) if a.use_count >= b.use_count else (b, a)
+                )  # keep the more-used lesson; the merge direction follows usage
                 proposals.append(
-                    f"### Merge {b.lesson_id} into {a.lesson_id}\n"
+                    f"### Merge {gone.lesson_id} into {keeper.lesson_id}\n"
                     f"- {a.lesson_id}: {a.source_summary} (used {a.use_count})\n"
                     f"- {b.lesson_id}: {b.source_summary} (used {b.use_count})\n"
                     f"- Review both lessons; merge any unique content from "
-                    f"{b.lesson_id} into {a.lesson_id} by hand, then run\n"
+                    f"{gone.lesson_id} into {keeper.lesson_id} by hand, then run\n"
                     f"  `agentbrain apply <this-file>`\n\n"
-                    f"```agentbrain\nsupersede: {b.lesson_id} -> {a.lesson_id}\n```\n"
+                    f"```agentbrain\nsupersede: {gone.lesson_id} -> {keeper.lesson_id}\n```\n"
                 )
 
     for l in lessons:
@@ -180,18 +210,18 @@ def memory_lint(scope: str = "all", vault: Vault | None = None) -> str:
         return "Lint clean: no duplicates, no stale/expired/orphan/low-confidence lessons."
 
     findings.sort()
-    proposal_path = v.consolidations_dir / f"lint-{_stamp()}.md"
-    v.consolidations_dir.mkdir(parents=True, exist_ok=True)
-    proposal_path.write_text(
-        "# Lint proposal — auto-generated\n\n"
-        f"Scope: {scope}\nDate: {dt.date.today()}\n\n## Findings\n\n"
-        + "\n".join(f"- {f}" for f in findings)
-        + "\n\n## Suggested merges\n\n"
-        + "\n".join(proposals or ["- none"])
-        + "\n\n> Apply only after human approval.\n",
-        encoding="utf-8",
-    )
-    v.append_log("lint", f"findings:{len(findings)}")
+    with v.locked():  # proposal + audit log as one atomic unit
+        proposal_path = _next_proposal_path(v, "lint")
+        atomic_write(
+            proposal_path,
+            "# Lint proposal — auto-generated\n\n"
+            f"Scope: {scope}\nDate: {dt.date.today()}\n\n## Findings\n\n"
+            + "\n".join(f"- {f}" for f in findings)
+            + "\n\n## Suggested merges\n\n"
+            + "\n".join(proposals or ["- none"])
+            + "\n\n> Apply only after human approval.\n",
+        )
+        v._append_log_locked("lint", f"findings:{len(findings)}")
     return "\n".join(
         [f"Lint found {len(findings)} issue(s):", ""]
         + [f"- {f}" for f in findings]
@@ -252,14 +282,15 @@ def memory_distill(
             f"`{t}` lessons into one distilled lesson after approval.\n"
         )
 
-    proposal_path = v.consolidations_dir / f"distill-{_stamp()}.md"
-    v.consolidations_dir.mkdir(parents=True, exist_ok=True)
-    proposal_path.write_text(
-        "# Distill proposal — auto-generated\n\n"
-        f"Window: {window_days} days · threshold: {min_repeat}\n\n" + "\n".join(sections),
-        encoding="utf-8",
-    )
-    v.append_log("distill", f"cases:{len(hot_cases)},tags:{len(hot_tags)}")
+    with v.locked():  # proposal + audit log as one atomic unit
+        proposal_path = _next_proposal_path(v, "distill")
+        atomic_write(
+            proposal_path,
+            "# Distill proposal — auto-generated\n\n"
+            f"Window: {window_days} days · threshold: {min_repeat}\n\n"
+            + "\n".join(sections),
+        )
+        v._append_log_locked("distill", f"cases:{len(hot_cases)},tags:{len(hot_tags)}")
     lines += ["", f"Proposal written: {v.relpath(proposal_path)} — human approval required."]
     return "\n".join(lines)
 
