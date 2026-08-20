@@ -43,6 +43,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("index", help="Rebuild Case-Learnings/Index.md")
     sub.add_parser("path", help="Print resolved vault path")
+
+    p = sub.add_parser("profile", help="Print the owner profile (Immutable + Mutable-Hints)")
+    p = sub.add_parser("suggest", help="Propose a profile change (goes to Agent-Profile/_suggestions/)")
+    p.add_argument("--title", required=True, help="Short title for the suggestion")
+    p.add_argument("--change", required=True, help="What should change and why")
+
+    p = sub.add_parser("apply", help="Execute an approved consolidation proposal")
+    p.add_argument("proposal", help="Proposal file: bare name in _consolidations/, vault-relative or absolute path")
+
     sub.add_parser("serve", help="Start the MCP server on stdio")
     return parser
 
@@ -81,6 +90,18 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "index":
         vault.rebuild_index()
         print(f"Index rebuilt: {vault.relpath(vault.index_md)}")
+    elif args.cmd == "profile":
+        print(api.memory_profile(vault=vault))
+    elif args.cmd == "suggest":
+        print(api.memory_suggest(title=args.title, change=args.change, vault=vault))
+    elif args.cmd == "apply":
+        from .apply import ProposalError, apply_proposal
+
+        try:
+            print(apply_proposal(vault, args.proposal))
+        except ProposalError as e:
+            print(str(e), file=sys.stderr)
+            return 2
     return 0
 
 

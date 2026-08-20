@@ -6,6 +6,7 @@ from collections import Counter
 
 from .config import Config
 from .models import Lesson
+from .profile import Profile
 from .retrieval import _days_since, search_lessons, tokenize
 from .vault import Vault, VaultNotInitialized
 
@@ -149,8 +150,10 @@ def memory_lint(scope: str = "all", vault: Vault | None = None) -> str:
                     f"### Merge {b.lesson_id} into {a.lesson_id}\n"
                     f"- {a.lesson_id}: {a.source_summary} (used {a.use_count})\n"
                     f"- {b.lesson_id}: {b.source_summary} (used {b.use_count})\n"
-                    f"- Suggested: merge content into {a.lesson_id}, then set "
-                    f"`{b.lesson_id}.superseded_by = {a.lesson_id}` after approval.\n"
+                    f"- Review both lessons; merge any unique content from "
+                    f"{b.lesson_id} into {a.lesson_id} by hand, then run\n"
+                    f"  `agentbrain apply <this-file>`\n\n"
+                    f"```agentbrain\nsupersede: {b.lesson_id} -> {a.lesson_id}\n```\n"
                 )
 
     for l in lessons:
@@ -186,7 +189,12 @@ def memory_lint(scope: str = "all", vault: Vault | None = None) -> str:
     return "\n".join(
         [f"Lint found {len(findings)} issue(s):", ""]
         + [f"- {f}" for f in findings]
-        + ["", f"Proposal written: {v.relpath(proposal_path)}"]
+        + [
+            "",
+            f"Proposal written: {v.relpath(proposal_path)}",
+            "Review it, merge content by hand where needed, then run "
+            f"`agentbrain apply {v.relpath(proposal_path)}`.",
+        ]
     )
 
 
@@ -248,3 +256,36 @@ def memory_distill(
     v.append_log("distill", f"cases:{len(hot_cases)},tags:{len(hot_tags)}")
     lines += ["", f"Proposal written: {v.relpath(proposal_path)} — human approval required."]
     return "\n".join(lines)
+
+
+def memory_profile(vault: Vault | None = None) -> str:
+    try:
+        v = _open_vault(vault)
+    except VaultNotInitialized as e:
+        return str(e)
+    text = Profile(v).read()
+    if not text:
+        return (
+            "Profile is empty. The owner can add Markdown files under "
+            "Agent-Profile/Immutable/ (hard rules) and Agent-Profile/Mutable-Hints/ "
+            "(soft preferences); agents read them via memory_profile."
+        )
+    return text
+
+
+def memory_suggest(title: str, change: str, vault: Vault | None = None) -> str:
+    try:
+        v = _open_vault(vault)
+    except VaultNotInitialized as e:
+        return str(e)
+    if not title or not title.strip():
+        return "Refused: empty title."
+    if not change or not change.strip():
+        return "Refused: empty change."
+    path = Profile(v).suggest(title, change)
+    v.append_log("suggest", v.relpath(path))
+    return (
+        f"Suggestion saved → {v.relpath(path)}\n"
+        "The owner reviews _suggestions/ and applies it manually; "
+        "Agent-Profile itself was not modified."
+    )

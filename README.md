@@ -44,7 +44,10 @@ pip install -e .                 # 需要 Python >= 3.10
 agentbrain init ~/agentbrain     # 生成 vault 脚手架（幂等，可重复执行）
 agentbrain ingest --case demo --lesson "部署前必须先跑迁移脚本" --tags 部署,运维
 agentbrain query "部署 迁移"
+agentbrain profile                # 查看个人偏好（Immutable + Mutable-Hints）
+agentbrain suggest --title "回复用中文" --change "偏好简洁的中文回复"   # 提交偏好建议
 agentbrain lint                    # 体检：重复/过时/无标签/低置信度 → 生成整合提案
+agentbrain apply lint-20260820-172206.md   # 人工审核后执行提案（自动归档）
 agentbrain distill                 # 分析 log 中重复出现的模式 → 生成提升提案
 ```
 
@@ -77,7 +80,10 @@ pip install -e .                 # Python >= 3.10
 agentbrain init ~/agentbrain     # scaffold the vault (idempotent)
 agentbrain ingest --case demo --lesson "Always run migrations before deploy" --tags deploy,ops
 agentbrain query "deploy migrations"
+agentbrain profile                # print the owner profile
+agentbrain suggest --title "Short replies" --change "Keep answers under 3 sentences."
 agentbrain lint                    # health check → consolidation proposals
+agentbrain apply lint-20260820-172206.md   # execute an approved proposal (archives it)
 agentbrain distill                 # recurring-pattern analysis → promotion proposals
 agentbrain serve                   # start the MCP server on stdio
 ```
@@ -98,9 +104,22 @@ args = ["serve"]
 | `memory_ingest(case_id, lesson, tags, confidence=0.8, source_summary=None)` | Save a new lesson (facts + scenario + fix, ≤ 30 lines). Creates a file, updates Index.md and log.md. |
 | `memory_lint(scope="all")` | Health check: duplicates, stale, expired, untagged, low-confidence. Writes a merge proposal to `_consolidations/`. |
 | `memory_distill(window_days=30, min_repeat=3)` | Finds cases/tags ingested ≥ N times in the window and writes a promotion proposal. |
+| `memory_profile()` | Returns the owner profile (hard rules + soft preferences). Read-only; agents call it once per session to tailor behavior. |
+| `memory_suggest(title, change)` | Proposes a profile change into `Agent-Profile/_suggestions/` for the owner to review — agents never edit the profile itself. |
 
-Agents are expected to follow `AGENTS.md` in the vault root: query at task start,
-ingest on learnings, never edit existing lessons, never write secrets into the vault.
+## MCP resources
+
+| URI | Content |
+|-----|---------|
+| `agentbrain://rules` | `AGENTS.md` — vault rules for every agent |
+| `agentbrain://index` | `Case-Learnings/Index.md` — retrieval layer 1 |
+| `agentbrain://profile` | merged owner profile (read-only) |
+
+Agents are expected to follow `AGENTS.md` in the vault root: read the profile at
+session start, query at task start, ingest on learnings, never edit existing
+lessons, never write secrets into the vault. Consolidation proposals carry
+machine-readable directive blocks (```` ```agentbrain ````); only the owner
+executes them via `agentbrain apply`.
 
 ## Design notes
 
@@ -116,7 +135,8 @@ ingest on learnings, never edit existing lessons, never write secrets into the v
 ## Roadmap
 
 - [ ] Hybrid fallback search (SQLite FTS5 + local embedding, RRF fusion) for large vaults
-- [ ] `agentbrain apply <proposal>` to execute approved consolidations
+- [x] `agentbrain apply <proposal>` to execute approved consolidations
+- [x] Owner profile layer: `memory_profile` / `memory_suggest` + MCP resources
 - [ ] Temp-layer bridge (Mem0-style short-term memory → distill promotions)
 - [ ] Keyring-backed `${ENV:...}` resolution helper
 - [ ] Git snapshot hook on ingest/distill

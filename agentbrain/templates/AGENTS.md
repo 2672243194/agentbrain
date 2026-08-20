@@ -17,16 +17,30 @@ Codex, OpenCode, Cursor, ...). Read this file at session start. It is small on p
 
 ## Session workflow
 
-1. **Task start** — call `memory_query` with the task topic (`top_k=5`).
+1. **Know the owner** — call `memory_profile` once per session (or read resource
+   `agentbrain://profile`) and tailor language, tone and formatting accordingly.
+2. **Task start** — call `memory_query` with the task topic (`top_k=5`).
    If MCP tools are unavailable, read `Case-Learnings/Index.md` and grep `Learnings/`.
-2. **Before answering** — open the top 1–3 candidate lesson files in full.
-3. **During the task** — NEVER edit or delete existing lessons. Create new ones only.
-4. **When you learn something reusable** — call `memory_ingest` immediately.
+3. **Before answering** — open the top 1–3 candidate lesson files in full.
+4. **During the task** — NEVER edit or delete existing lessons. Create new ones only.
+5. **When you learn something reusable** — call `memory_ingest` immediately.
    One lesson = one file = facts + applicable scenario + fix, ≤ 30 lines, no storytelling.
-5. **Housekeeping (when the owner asks, or weekly)** — `memory_lint` writes proposals
-   to `_consolidations/`. A human approves them; never apply a proposal yourself.
-6. **Recurring patterns** — `memory_distill` proposes promoting repeated patterns
+6. **Observed a preference?** — call `memory_suggest` with a short title and the
+   proposed change. Never edit `Agent-Profile/` yourself; the owner reviews
+   `_suggestions/` and decides.
+7. **Housekeeping (when the owner asks, or weekly)** — `memory_lint` writes proposals
+   to `_consolidations/`. The owner merges content by hand and runs
+   `agentbrain apply <file>`; never apply a proposal yourself.
+8. **Recurring patterns** — `memory_distill` proposes promoting repeated patterns
    into a distilled lesson (human approval required).
+
+## MCP resources (read-only context)
+
+| URI | Content |
+|-----|---------|
+| `agentbrain://rules` | this file |
+| `agentbrain://index` | `Case-Learnings/Index.md` |
+| `agentbrain://profile` | merged owner profile |
 
 ## Hard rules
 
