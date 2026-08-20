@@ -28,10 +28,17 @@ Codex, OpenCode, Cursor, ...). Read this file at session start. It is small on p
 6. **Observed a preference?** — call `memory_suggest` with a short title and the
    proposed change. Never edit `Agent-Profile/` yourself; the owner reviews
    `_suggestions/` and decides.
-7. **Housekeeping (when the owner asks, or weekly)** — `memory_lint` writes proposals
+7. **Session wrap-up** — when a substantive task ends, reflect once: what did this
+   session teach that is worth remembering? Ingest each distinct lesson now
+   (facts + scenario + fix, one file each) if not already ingested. Durable
+   preference shift → `memory_suggest`. Then tell the owner in one line what you
+   stored (or "nothing worth keeping"). Trivial sessions (small talk, quick
+   lookups) need no wrap-up. Triggered by the owner saying e.g.
+   "总结一下这次对话" / "wrap up", or proactively at natural task completion.
+8. **Housekeeping (when the owner asks, or weekly)** — `memory_lint` writes proposals
    to `_consolidations/`. The owner merges content by hand and runs
    `agentbrain apply <file>`; never apply a proposal yourself.
-8. **Recurring patterns** — `memory_distill` proposes promoting repeated patterns
+9. **Recurring patterns** — `memory_distill` proposes promoting repeated patterns
    into a distilled lesson (human approval required).
 
 ## MCP resources (read-only context)
