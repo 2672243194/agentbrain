@@ -6,7 +6,7 @@
 **三步上手 / Quick start (3 steps)**
 
 ```bash
-pip install agentbrain        # 或: pip install git+https://github.com/2672243194/agentbrain.git
+pip install git+https://github.com/2672243194/agentbrain.git   # Python >= 3.10
 agentbrain init ~/agentbrain  # 建立记忆库（幂等，可重复执行）
 agentbrain doctor             # 自检：一切正常会显示 "Everything looks healthy."
 ```
@@ -64,7 +64,7 @@ agentbrain/                    # vault root (git-friendly, Obsidian-friendly)
 ## 中文快速上手
 
 ```bash
-pip install agentbrain                 # Python >= 3.10（未发 PyPI 前: pip install git+https://github.com/2672243194/agentbrain.git）
+pip install git+https://github.com/2672243194/agentbrain.git   # Python >= 3.10
 agentbrain init ~/agentbrain           # 生成 vault 脚手架（幂等），自动开启 Git 快照
 agentbrain doctor                      # 体检：vault/索引/锁/快照/log 一览
 agentbrain ingest --case demo --lesson "部署前必须先跑迁移脚本" --tags 部署,运维
@@ -112,7 +112,7 @@ Vault 路径解析顺序：`--vault` 参数 > `AGENTBRAIN_VAULT` 环境变量 > 
 ## English quickstart
 
 ```bash
-pip install agentbrain                 # Python >= 3.10 (or: pip install git+https://github.com/2672243194/agentbrain.git)
+pip install git+https://github.com/2672243194/agentbrain.git   # Python >= 3.10
 agentbrain init ~/agentbrain           # scaffold the vault (idempotent), enables git snapshots
 agentbrain doctor                      # health check: vault, index, lock, snapshots, log
 agentbrain ingest --case demo --lesson "Always run migrations before deploy" --tags deploy,ops
