@@ -3,7 +3,31 @@
 > Local-first long-term memory for AI agents — a plain Markdown vault + a thin MCP server.
 > 给 AI Agent 用的本地长期记忆：纯 Markdown 知识库 + 薄 MCP server。
 
-[中文快速上手](#中文快速上手) · [English quickstart](#english-quickstart)
+**三步上手 / Quick start (3 steps)**
+
+```bash
+pip install agentbrain        # 或: pip install git+https://github.com/2672243194/agentbrain.git
+agentbrain init ~/agentbrain  # 建立记忆库（幂等，可重复执行）
+agentbrain doctor             # 自检：一切正常会显示 "Everything looks healthy."
+```
+
+```json
+{
+  "mcpServers": {
+    "agentbrain": {
+      "command": "agentbrain",
+      "args": ["serve"],
+      "env": { "AGENTBRAIN_VAULT": "D:\\agentbrain" }
+    }
+  }
+}
+```
+
+把上面 JSON（vault 路径换成你的）粘进任意 MCP 客户端（Claude Code / Codex / Cursor / DSH / Open WebUI…），重启客户端，完成。Agent 从此有了跨会话、跨工具的长期记忆。
+
+Paste that JSON (with your vault path) into any MCP client and restart it — done. Your agents now share one long-term memory.
+
+[中文详细说明](#中文快速上手) · [English quickstart](#english-quickstart)
 
 ## Why agentbrain / 设计理念
 
@@ -40,16 +64,28 @@ agentbrain/                    # vault root (git-friendly, Obsidian-friendly)
 ## 中文快速上手
 
 ```bash
-pip install -e .                 # 需要 Python >= 3.10
-agentbrain init ~/agentbrain     # 生成 vault 脚手架（幂等，可重复执行）
+pip install agentbrain                 # Python >= 3.10（未发 PyPI 前: pip install git+https://github.com/2672243194/agentbrain.git）
+agentbrain init ~/agentbrain           # 生成 vault 脚手架（幂等），自动开启 Git 快照
+agentbrain doctor                      # 体检：vault/索引/锁/快照/log 一览
 agentbrain ingest --case demo --lesson "部署前必须先跑迁移脚本" --tags 部署,运维
 agentbrain query "部署 迁移"
-agentbrain profile                # 查看个人偏好（Immutable + Mutable-Hints）
-agentbrain suggest --title "回复用中文" --change "偏好简洁的中文回复"   # 提交偏好建议
-agentbrain lint                    # 体检：重复/过时/无标签/低置信度 → 生成整合提案
-agentbrain apply lint-20260820-172206.md   # 人工审核后执行提案（自动归档）
-agentbrain distill                 # 分析 log 中重复出现的模式 → 生成提升提案
+agentbrain profile                     # 查看个人偏好（Immutable + Mutable-Hints）
+agentbrain suggest --title "回复用中文" --change "偏好简洁的中文回复"    # 提交偏好建议
+agentbrain lint                        # 体检：重复/过时/无标签/低置信度 → 生成整合提案
+agentbrain apply lint-20260820-172206.md      # 人工审核后执行提案（自动归档）
+agentbrain distill                     # 分析 log 中重复出现的模式 → 生成提升提案
+agentbrain snapshot -m "手动备份"      # 手动提交快照（如用 Obsidian 手改文件后）
 ```
+
+日常你只需要做三件事（频率都很低）：
+
+| 事 | 命令 | 频率 |
+|---|---|---|
+| 想看库健不健康 | `agentbrain doctor` | 随意 |
+| 记忆整理（清重复/过时） | `agentbrain lint` → 审核 → `agentbrain apply <提案>` | 约一周一次 |
+| 手改文件后备份 | `agentbrain snapshot` | 改完就跑 |
+
+其余全自动：Agent 会话开始读偏好、任务前查经验、学到东西写入（每次写入自动 git 快照，可回滚）。
 
 在 MCP 客户端里接入（以 Claude Code 为例）：
 
@@ -76,16 +112,18 @@ Vault 路径解析顺序：`--vault` 参数 > `AGENTBRAIN_VAULT` 环境变量 > 
 ## English quickstart
 
 ```bash
-pip install -e .                 # Python >= 3.10
-agentbrain init ~/agentbrain     # scaffold the vault (idempotent)
+pip install agentbrain                 # Python >= 3.10 (or: pip install git+https://github.com/2672243194/agentbrain.git)
+agentbrain init ~/agentbrain           # scaffold the vault (idempotent), enables git snapshots
+agentbrain doctor                      # health check: vault, index, lock, snapshots, log
 agentbrain ingest --case demo --lesson "Always run migrations before deploy" --tags deploy,ops
 agentbrain query "deploy migrations"
-agentbrain profile                # print the owner profile
+agentbrain profile                     # print the owner profile
 agentbrain suggest --title "Short replies" --change "Keep answers under 3 sentences."
-agentbrain lint                    # health check → consolidation proposals
-agentbrain apply lint-20260820-172206.md   # execute an approved proposal (archives it)
-agentbrain distill                 # recurring-pattern analysis → promotion proposals
-agentbrain serve                   # start the MCP server on stdio
+agentbrain lint                        # health check → consolidation proposals
+agentbrain apply lint-20260820-172206.md      # execute an approved proposal (archives it)
+agentbrain distill                     # recurring-pattern analysis → promotion proposals
+agentbrain snapshot -m "manual backup" # commit a snapshot (e.g. after hand-edits)
+agentbrain serve                       # start the MCP server on stdio
 ```
 
 Codex CLI (`~/.codex/config.toml`):
@@ -133,9 +171,21 @@ executes them via `agentbrain apply`.
   agents are serialized by an OS-level byte-range lock (`.vault.lock`, msvcrt/fcntl —
   released instantly if the holder crashes), and all file writes are atomic
   (temp + rename) so readers never see torn files.
+- **Point-in-time recovery**: every vault is its own git repo (created by `init`,
+  repo-local identity only). Each content write — ingest, apply, lint/distill
+  proposal, suggestion, index rebuild — is auto-committed, so any bad edit can be
+  rolled back with plain git. Query-driven `use_count` bumps ride along with the
+  next content commit instead of polluting history. Works fully without git; if git
+  is missing, snapshots are silently disabled.
 
 ## Changelog
 
+- **0.4.0** — Maturity pass: git snapshots (every vault is a self-contained git repo;
+  every content write is an auto-commit you can roll back — repo-local identity,
+  graceful without git), `agentbrain doctor` one-shot health check (vault, index
+  freshness, lock round-trip, snapshot status, log; prints a copy-paste MCP config
+  with your vault path), `agentbrain snapshot` manual commit, fool-proof 3-step
+  quickstart, PyPI-ready packaging. 74 tests.
 - **0.3.2** — Locking rewrite + edge cases: the vault lock now uses OS-level
   byte-range locks (msvcrt on Windows, fcntl on POSIX) instead of
   create-file-and-reclaim — a crashed holder releases instantly (previously all
@@ -163,14 +213,25 @@ executes them via `agentbrain apply`.
 - **0.1.0** — Initial MVP: vault + frontmatter + CJK-aware BM25 retrieval,
   MCP server (query/ingest/lint/distill) + CLI, scaffold templates.
 
-## Roadmap
+## Roadmap — maintenance mode
 
-- [ ] Hybrid fallback search (SQLite FTS5 + local embedding, RRF fusion) for large vaults
+The core promise — *a local, token-efficient, agent-shared long-term memory that
+you own as plain Markdown* — is complete and battle-tested in daily use.
+The project is now in maintenance mode: bug fixes, compatibility with new MCP
+client versions, and small quality-of-life improvements. Big new subsystems are
+deliberately out of scope; if a vault ever grows past a few hundred lessons,
+these are the parked ideas:
+
+- Hybrid fallback search (SQLite FTS5 + local embedding, RRF fusion)
+- Temp-layer bridge (Mem0-style short-term memory → distill promotions)
+- Keyring-backed `${ENV:...}` resolution helper
+
+Done along the way:
+
+- [x] Git snapshot on every write
 - [x] `agentbrain apply <proposal>` to execute approved consolidations
 - [x] Owner profile layer: `memory_profile` / `memory_suggest` + MCP resources
-- [ ] Temp-layer bridge (Mem0-style short-term memory → distill promotions)
-- [ ] Keyring-backed `${ENV:...}` resolution helper
-- [ ] Git snapshot hook on ingest/distill
+- [x] OS-level cross-process vault lock + atomic writes
 
 ## Development
 

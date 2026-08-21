@@ -98,6 +98,7 @@ def apply_proposal(vault: Vault, proposal: str | Path) -> str:
         renamed = p.with_name(p.stem + ".applied.md")
         p.rename(renamed)
         vault._append_log_locked("apply", f"{p.name} superseded:{len(unique)}")
+        vault._snapshot_locked(f"apply: {p.name} (superseded {len(unique)})")
     return "\n".join(
         [f"Applied {len(unique)} directive(s) from {vault.relpath(p)}:"]
         + [f"- {old} → {new} (superseded)" for old, new in unique]

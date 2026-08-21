@@ -9,6 +9,7 @@ from .config import Config
 from .frontmatter import dump, parse
 from .locking import atomic_write, vault_lock
 from .models import Lesson
+from .snapshot import Snapshot
 
 _DATE = "%Y-%m-%d"
 _LOG_RE = re.compile(r"^## \[(\d{4}-\d{2}-\d{2})\] (.+)$")
@@ -62,6 +63,12 @@ class Vault:
         multi-step transactions (e.g. apply_proposal)."""
         return vault_lock(self.root)
 
+    def _snapshot_locked(self, message: str) -> None:
+        """Best-effort git snapshot; call only while holding the write lock.
+        Query-driven use_count bumps are deliberately not snapshotted — they
+        ride along with the next content commit."""
+        Snapshot(self.root).commit(message)
+
     # --- lessons ---
 
     def lessons(self, include_superseded: bool = False) -> list[Lesson]:
@@ -112,6 +119,7 @@ class Vault:
     def save(self, lesson: Lesson, action: str | None = None) -> None:
         with self.locked():
             self._save_locked(lesson, action, rebuild=True)
+            self._snapshot_locked(f"{action or 'save'}: {lesson.lesson_id}")
 
     def _save_locked(
         self, lesson: Lesson, action: str | None = None, rebuild: bool = True
@@ -186,6 +194,7 @@ class Vault:
     def rebuild_index(self, lessons: list[Lesson] | None = None) -> None:
         with self.locked():
             self._rebuild_index_locked(lessons)
+            self._snapshot_locked("index: rebuild")
 
     def _rebuild_index_locked(self, lessons: list[Lesson] | None = None) -> None:
         lessons = lessons if lessons is not None else self.lessons(include_superseded=True)

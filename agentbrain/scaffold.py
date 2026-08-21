@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime as dt
 from pathlib import Path
 
+from .snapshot import Snapshot
 from .vault import Vault
 
 _TEMPLATES = Path(__file__).parent / "templates"
@@ -55,6 +56,16 @@ def init(root: Path | str, force: bool = False) -> str:
     v.rebuild_index()
     if not v.log_md.read_text(encoding="utf-8").strip().endswith(f"[{today}] init | vault"):
         v.append_log("init", "vault")
+    if Snapshot(root).ensure():
+        with v.locked():
+            v._snapshot_locked("init: vault scaffolded")
+        lines += ["", "Snapshots: enabled — every write is a git commit you can roll back."]
+    else:
+        lines += [
+            "",
+            "Snapshots: disabled (git not found). Everything works without it;",
+            "install git to enable point-in-time recovery.",
+        ]
     lines += [
         "",
         "Next:",

@@ -43,6 +43,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("index", help="Rebuild Case-Learnings/Index.md")
     sub.add_parser("path", help="Print resolved vault path")
+    sub.add_parser("doctor", help="One-shot health check (vault, index, lock, snapshots)")
+
+    p = sub.add_parser("snapshot", help="Commit all vault changes (e.g. after hand-editing files)")
+    p.add_argument("-m", "--message", default="manual snapshot", help="Commit message")
 
     p = sub.add_parser("profile", help="Print the owner profile (Immutable + Mutable-Hints)")
     p = sub.add_parser("suggest", help="Propose a profile change (goes to Agent-Profile/_suggestions/)")
@@ -65,6 +69,34 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "path":
         print(Config.load(args.vault).vault_dir)
+        return 0
+    if args.cmd == "doctor":
+        from .doctor import doctor
+
+        try:
+            v = Vault.open(Config.load(args.vault))
+        except VaultNotInitialized:
+            print(doctor())
+            return 2
+        print(doctor(v))
+        return 0
+    if args.cmd == "snapshot":
+        from .snapshot import Snapshot
+
+        try:
+            v = Vault.open(Config.load(args.vault))
+        except VaultNotInitialized as e:
+            print(str(e), file=sys.stderr)
+            return 2
+        snap = Snapshot(v.root)
+        if not snap.enabled and not snap.ensure():
+            print("Snapshots unavailable: git not found.", file=sys.stderr)
+            return 2
+        with v.locked():
+            if snap.commit(args.message):
+                print(f"Snapshot committed: {args.message}")
+            else:
+                print("Nothing to commit — vault unchanged.")
         return 0
     if args.cmd == "serve":
         from . import mcp_server

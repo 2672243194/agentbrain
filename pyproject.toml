@@ -4,17 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentbrain"
-version = "0.2.0"
+version = "0.4.0"
 description = "Local-first long-term memory for AI agents: a plain Markdown vault plus a thin MCP server. Token-efficient, plug-and-play."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [{ name = "agentbrain contributors" }]
-keywords = ["agent", "memory", "mcp", "llm", "claude-code", "codex", "opencode", "obsidian"]
+keywords = ["agent", "memory", "mcp", "llm", "claude-code", "codex", "opencode", "obsidian", "long-term-memory", "bm25"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -25,6 +26,11 @@ dependencies = [
     "mcp>=1.2.0",
     "PyYAML>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/2672243194/agentbrain"
+Issues = "https://github.com/2672243194/agentbrain/issues"
+Changelog = "https://github.com/2672243194/agentbrain/releases"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]

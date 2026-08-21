@@ -131,6 +131,7 @@ def memory_ingest(
             confidence=confidence,
         )
         v._save_locked(lesson_obj, action="ingest")
+        v._snapshot_locked(f"ingest: {lesson_obj.lesson_id}")
     return (
         f"Saved {lesson_obj.lesson_id} → {v.relpath(lesson_obj.path)}\n"
         f"tags: {', '.join(tags) or '-'} · confidence {confidence} · index & log updated"
@@ -223,6 +224,7 @@ def memory_lint(scope: str = "all", vault: Vault | None = None) -> str:
             + "\n\n> Apply only after human approval.\n",
         )
         v._append_log_locked("lint", f"findings:{len(findings)}")
+        v._snapshot_locked(f"lint: proposal ({len(findings)} findings)")
     return "\n".join(
         [f"Lint found {len(findings)} issue(s):", ""]
         + [f"- {f}" for f in findings]
@@ -292,6 +294,7 @@ def memory_distill(
             + "\n".join(sections),
         )
         v._append_log_locked("distill", f"cases:{len(hot_cases)},tags:{len(hot_tags)}")
+        v._snapshot_locked(f"distill: proposal ({len(hot_cases)} cases, {len(hot_tags)} tags)")
     lines += ["", f"Proposal written: {v.relpath(proposal_path)} — human approval required."]
     return "\n".join(lines)
 
@@ -320,8 +323,10 @@ def memory_suggest(title: str, change: str, vault: Vault | None = None) -> str:
         return "Refused: empty title."
     if not change or not change.strip():
         return "Refused: empty change."
-    path = Profile(v).suggest(title, change)
-    v.append_log("suggest", v.relpath(path))
+    with v.locked():  # suggestion file + audit log + snapshot as one unit
+        path = Profile(v).suggest(title, change)
+        v._append_log_locked("suggest", v.relpath(path))
+        v._snapshot_locked(f"suggest: {title.strip()[:60]}")
     return (
         f"Suggestion saved → {v.relpath(path)}\n"
         "The owner reviews _suggestions/ and applies it manually; "
