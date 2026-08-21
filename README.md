@@ -6,7 +6,7 @@
 **三步上手 / Quick start (3 steps)**
 
 ```bash
-pip install git+https://github.com/2672243194/agentbrain.git   # Python >= 3.10
+pip install mnemosyne-lite             # Python >= 3.10（PyPI 包名；命令仍是 agentbrain）
 agentbrain init ~/agentbrain  # 建立记忆库（幂等，可重复执行）
 agentbrain doctor             # 自检：一切正常会显示 "Everything looks healthy."
 ```
@@ -70,7 +70,7 @@ agentbrain/                    # vault root (git-friendly, Obsidian-friendly)
 ## 中文快速上手
 
 ```bash
-pip install git+https://github.com/2672243194/agentbrain.git   # Python >= 3.10
+pip install mnemosyne-lite             # Python >= 3.10
 agentbrain init ~/agentbrain           # 生成 vault 脚手架（幂等），自动开启 Git 快照
 agentbrain doctor                      # 体检：vault/索引/锁/快照/log 一览
 agentbrain ingest --case demo --lesson "部署前必须先跑迁移脚本" --tags 部署,运维
@@ -82,6 +82,9 @@ agentbrain apply lint-20260820-172206.md      # 人工审核后执行提案（�
 agentbrain distill                     # 分析 log 中重复出现的模式 → 生成提升提案
 agentbrain snapshot -m "手动备份"      # 手动提交快照（如用 Obsidian 手改文件后）
 ```
+
+> 说明：PyPI 包名为 `mnemosyne-lite`（`agentbrain` 在 PyPI 上与已有项目过于相似，无法注册）。
+> 安装后的 CLI 命令与 Python 包名仍是 `agentbrain`，GitHub 仓库地址不变。
 
 日常你只需要做三件事（频率都很低）：
 
@@ -118,7 +121,7 @@ Vault 路径解析顺序：`--vault` 参数 > `AGENTBRAIN_VAULT` 环境变量 > 
 ## English quickstart
 
 ```bash
-pip install git+https://github.com/2672243194/agentbrain.git   # Python >= 3.10
+pip install mnemosyne-lite             # Python >= 3.10
 agentbrain init ~/agentbrain           # scaffold the vault (idempotent), enables git snapshots
 agentbrain doctor                      # health check: vault, index, lock, snapshots, log
 agentbrain ingest --case demo --lesson "Always run migrations before deploy" --tags deploy,ops
@@ -131,6 +134,10 @@ agentbrain distill                     # recurring-pattern analysis → promotio
 agentbrain snapshot -m "manual backup" # commit a snapshot (e.g. after hand-edits)
 agentbrain serve                       # start the MCP server on stdio
 ```
+
+> Note: the PyPI distribution name is `mnemosyne-lite` (`agentbrain` was rejected
+> as too similar to an existing PyPI project); the installed CLI command and the
+> Python import name remain `agentbrain`.
 
 Codex CLI (`~/.codex/config.toml`):
 
