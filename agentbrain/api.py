@@ -9,6 +9,7 @@ from .config import Config
 from .locking import atomic_write
 from .models import Lesson
 from .profile import Profile
+from .redact import redaction_hint, scan as scan_secrets
 from .retrieval import _days_since, search_lessons, tokenize
 from .vault import Vault, VaultNotInitialized
 
@@ -117,6 +118,9 @@ def memory_ingest(
         return str(e)
     if not lesson or not lesson.strip():
         return "Refused: empty lesson."
+    hits = scan_secrets(lesson) + scan_secrets(source_summary or "")
+    if hits:
+        return redaction_hint(hits)
 
     tags = _normalize_tags(tags)
     case_id = _clean_case_id(case_id)
@@ -207,6 +211,11 @@ def memory_lint(scope: str = "all", vault: Vault | None = None) -> str:
             findings.append(f"LOWCONF {l.lesson_id} (confidence {l.confidence})")
         if l.superseded_by and l.superseded_by not in all_ids:
             findings.append(f"DANGLING {l.lesson_id} → missing {l.superseded_by}")
+        for kind, _ in scan_secrets(l.content + "\n" + l.source_summary):
+            findings.append(
+                f"SECRET {l.lesson_id} ({kind}) — redact to ${{ENV:VAR}} by hand; "
+                "lint never modifies files"
+            )
 
     if not findings:
         return "Lint clean: no duplicates, no stale/expired/orphan/low-confidence lessons."

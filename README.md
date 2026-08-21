@@ -42,7 +42,13 @@ Paste that JSON (with your vault path) into any MCP client and restart it — do
 - **Plug-and-play via MCP** — one server, every client: Claude Code, Codex CLI,
   OpenCode, Cursor, DSH, Open WebUI, ...
 - **Secrets never enter the vault** — credentials live in env/keyring; lessons reference
-  `${ENV:VAR_NAME}` placeholders only, resolved at runtime via shell.
+  `${ENV:VAR_NAME}` placeholders only, resolved at runtime via shell. Since 0.4.1 this
+  is enforced, not just a rule: `memory_ingest` scans for credential-shaped content
+  (sk-/ghp_/AKIA/xox-/AIza keys, bearer tokens, private-key blocks, `password=`
+  assignments) and refuses the write, telling the agent to use a placeholder instead.
+  Placeholders and teaching examples (`sk-xxx`, `YOUR_KEY`) ingest fine. `lint` also
+  scans existing lessons and reports `SECRET` findings — read-only, never rewrites
+  files. Hand-written files are never touched.
 
 ## Vault layout
 
@@ -180,6 +186,13 @@ executes them via `agentbrain apply`.
 
 ## Changelog
 
+- **0.4.1** — Enforced secret redaction: `memory_ingest` scans content and
+  summaries for credential-shaped patterns (OpenAI/Anthropic/GitHub/AWS/Slack/Google
+  tokens, Bearer headers, private-key blocks, `password=`/`api_key=` assignments) and
+  refuses the write with a placeholder hint — the "secrets never enter the vault" rule
+  is now a mechanism, not just AGENTS.md discipline. `${ENV:VAR}` references and
+  teaching examples (`sk-xxx`) pass through. `lint` reports `SECRET` findings for
+  pre-existing lessons (read-only). 84 tests.
 - **0.4.0** — Maturity pass: git snapshots (every vault is a self-contained git repo;
   every content write is an auto-commit you can roll back — repo-local identity,
   graceful without git), `agentbrain doctor` one-shot health check (vault, index
@@ -223,11 +236,11 @@ deliberately out of scope; if a vault ever grows past a few hundred lessons,
 these are the parked ideas:
 
 - Hybrid fallback search (SQLite FTS5 + local embedding, RRF fusion)
-- Temp-layer bridge (Mem0-style short-term memory → distill promotions)
 - Keyring-backed `${ENV:...}` resolution helper
 
 Done along the way:
 
+- [x] Enforced secret redaction on ingest + SECRET findings in lint
 - [x] Git snapshot on every write
 - [x] `agentbrain apply <proposal>` to execute approved consolidations
 - [x] Owner profile layer: `memory_profile` / `memory_suggest` + MCP resources
