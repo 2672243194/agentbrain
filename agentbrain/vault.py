@@ -163,8 +163,8 @@ class Vault:
         n = 0
         if self.learnings_dir.is_dir():
             rx = re.compile(rf"^{re.escape(prefix)}(\d+)$")
-            for p in self.learnings_dir.glob(f"{prefix}*.md"):
-                m = rx.match(p.stem)
+            for p in self.learnings_dir.glob("*.md"):  # glob metachars in case_id
+                m = rx.match(p.stem)  # would silently miss files → id collision
                 if m:
                     n = max(n, int(m.group(1)))
         return f"{prefix}{n + 1:02d}"

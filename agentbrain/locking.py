@@ -7,10 +7,43 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-_STALE_SECONDS = 60.0
 _RETRY_INTERVAL = 0.05
 
 _local = threading.local()
+
+try:
+    import msvcrt
+
+    def _try_lock(fd: int) -> bool:
+        try:
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            return True
+        except OSError:
+            return False
+
+    def _release(fd: int) -> None:
+        try:
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        except OSError:
+            pass
+
+except ImportError:  # POSIX
+    import fcntl
+
+    def _try_lock(fd: int) -> bool:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except OSError:
+            return False
+
+    def _release(fd: int) -> None:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        except OSError:
+            pass
 
 
 class VaultLockTimeout(RuntimeError):
@@ -21,10 +54,10 @@ class VaultLockTimeout(RuntimeError):
 def vault_lock(root: Path, timeout: float = 10.0) -> Iterator[None]:
     """Mutual exclusion for vault writes across processes and threads.
 
-    Re-entrant within the same thread (nested calls from vault.save() inside
-    an explicit vault.locked() transaction). Cross-process exclusion uses a
-    lock file created atomically (O_CREAT|O_EXCL); if the holder crashed, the
-    lock is considered stale after _STALE_SECONDS and reclaimed.
+    Uses an OS-level byte-range lock on a lock file, so a crashed holder
+    releases instantly — no stale detection and no reclaim race. Re-entrant
+    within the same thread. The lock file persists on disk; removing it while
+    a holder might exist would break exclusion, so it is never unlinked.
     """
     lock = root / "Case-Learnings" / ".vault.lock"
     lock.parent.mkdir(parents=True, exist_ok=True)
@@ -38,51 +71,30 @@ def vault_lock(root: Path, timeout: float = 10.0) -> Iterator[None]:
             held[1] -= 1
         return
 
+    fd = os.open(str(lock), os.O_CREAT | os.O_RDWR)
     deadline = time.monotonic() + timeout
-    fd = -1
-    while True:
-        try:
-            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.write(fd, str(os.getpid()).encode())
-            break
-        except FileExistsError:
+    try:
+        while not _try_lock(fd):
             if time.monotonic() > deadline:
-                if _is_stale(lock):
-                    try:
-                        lock.unlink()
-                    except OSError:
-                        pass
-                    deadline = time.monotonic() + timeout
-                    continue
                 raise VaultLockTimeout(
                     f"Could not acquire vault lock at '{lock}' within {timeout}s. "
-                    "Another agent process may be stuck; delete the lock file to force."
+                    "Another process is writing to this vault; the lock releases "
+                    "automatically when that process exits."
                 )
             time.sleep(_RETRY_INTERVAL)
-    _local.held = [key, 1]
-    try:
-        yield
-    finally:
-        _local.held = None
+        _local.held = [key, 1]
         try:
-            os.close(fd)
+            yield
         finally:
-            try:
-                lock.unlink()
-            except OSError:
-                pass
-
-
-def _is_stale(lock: Path) -> bool:
-    try:
-        return time.time() - lock.stat().st_mtime > _STALE_SECONDS
-    except OSError:
-        return False
+            _local.held = None
+            _release(fd)
+    finally:
+        os.close(fd)
 
 
 def atomic_write(path: Path, text: str) -> None:
     """Write via temp file + atomic replace, so readers never see torn files."""
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     try:
         tmp.write_text(text, encoding="utf-8")
         os.replace(tmp, path)

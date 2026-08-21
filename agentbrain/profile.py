@@ -4,6 +4,8 @@ import datetime as dt
 import re
 from pathlib import Path
 
+from .frontmatter import dump
+from .locking import atomic_write
 from .vault import Vault
 
 _UNSAFE = re.compile(r"[^A-Za-z0-9\u4e00-\u9fff-]+")
@@ -49,13 +51,10 @@ class Profile:
         while path.exists():  # same-second suggestions must not overwrite each other
             path = self.suggestions_dir / f"{stamp}-{slug}-{n}.md"
             n += 1
-        path.write_text(
-            "---\n"
-            f"title: {title.strip()}\n"
-            f"created_at: {dt.date.today().isoformat()}\n"
-            "status: pending\n"
-            "---\n\n"
-            f"{change.strip()}\n",
-            encoding="utf-8",
-        )
+        meta = {
+            "title": title.strip(),
+            "created_at": dt.date.today().isoformat(),
+            "status": "pending",
+        }
+        atomic_write(path, dump(meta, change.strip()))
         return path

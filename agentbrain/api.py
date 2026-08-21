@@ -159,16 +159,17 @@ def memory_lint(scope: str = "all", vault: Vault | None = None) -> str:
     except VaultNotInitialized as e:
         return str(e)
 
-    lessons = v.lessons(include_superseded=True)
+    all_lessons = v.lessons(include_superseded=True)
+    lessons = all_lessons
     if scope.startswith("tag:"):
         target = scope[4:].strip()
-        lessons = [l for l in lessons if target in l.tags]
+        lessons = [l for l in all_lessons if target in l.tags]
     if not lessons:
         return "No lessons in scope."
 
     findings: list[str] = []
     proposals: list[str] = []
-    by_id = {l.lesson_id: l for l in lessons}
+    all_ids = {l.lesson_id for l in all_lessons}  # DANGLING must look beyond scope
     active = [l for l in lessons if not l.superseded_by]
 
     pre = [
@@ -203,7 +204,7 @@ def memory_lint(scope: str = "all", vault: Vault | None = None) -> str:
             findings.append(f"ORPHAN {l.lesson_id} (no tags)")
         if l.confidence < 0.5:
             findings.append(f"LOWCONF {l.lesson_id} (confidence {l.confidence})")
-        if l.superseded_by and l.superseded_by not in by_id:
+        if l.superseded_by and l.superseded_by not in all_ids:
             findings.append(f"DANGLING {l.lesson_id} → missing {l.superseded_by}")
 
     if not findings:

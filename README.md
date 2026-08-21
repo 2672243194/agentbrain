@@ -130,12 +130,21 @@ executes them via `agentbrain apply`.
   feeds `memory_distill` pattern analysis; `lint` refreshes nothing silently —
   every mutation of history goes through human-approved proposals.
 - **Single-user, local-first**: no daemon, no ports; concurrent writes from several
-  agents are serialized by a transient `.vault.lock` (auto-cleaned, stale-reclaimed
-  after 60 s), and all file writes are atomic (temp + rename) so readers never see
-  torn files.
+  agents are serialized by an OS-level byte-range lock (`.vault.lock`, msvcrt/fcntl —
+  released instantly if the holder crashes), and all file writes are atomic
+  (temp + rename) so readers never see torn files.
 
 ## Changelog
 
+- **0.3.2** — Locking rewrite + edge cases: the vault lock now uses OS-level
+  byte-range locks (msvcrt on Windows, fcntl on POSIX) instead of
+  create-file-and-reclaim — a crashed holder releases instantly (previously all
+  writes failed for up to 60 s) and the stale-reclaim race (two waiters both
+  unlinking and both acquiring) is gone. `agentbrain lint --scope tag:x` no longer
+  reports false DANGLING for supersede targets outside the scope; `case_id`s
+  containing glob metacharacters (`[`, `?`, `*`) no longer collide lesson ids;
+  suggestion files use real YAML frontmatter (titles with colons/newlines used to
+  corrupt it) and atomic writes. 65 tests.
 - **0.3.1** — Data-integrity fixes: concurrent same-case ingests no longer overwrite
   each other (lesson-id allocation moved inside the vault lock); `confidence: 0.0`
   round-trips correctly (was silently coerced to 0.8); lint/distill proposals are

@@ -16,7 +16,8 @@ def test_lock_is_reentrant_same_thread(tmp_path):
     with vault_lock(root):
         with vault_lock(root):
             pass  # nested acquisition must not deadlock
-    assert not (root / "Case-Learnings" / ".vault.lock").exists()
+    with vault_lock(root):  # released → immediately re-acquirable
+        pass
 
 
 def test_lock_serializes_threads(tmp_path):
@@ -43,24 +44,77 @@ def test_lock_serializes_threads(tmp_path):
     assert all(i.endswith(":in") and o == i.replace(":in", ":out") for i, o in pairs)
 
 
-def test_lock_timeout_and_stale_reclaim(tmp_path):
-    import os
+def test_lock_timeout_while_held(tmp_path):
+    root = tmp_path / "vault"
+    (root / "Case-Learnings").mkdir(parents=True)
+    held = threading.Event()
+    release = threading.Event()
 
+    def holder() -> None:
+        with vault_lock(root):
+            held.set()
+            release.wait(timeout=5)
+
+    t = threading.Thread(target=holder)
+    t.start()
+    held.wait(timeout=5)
+    with pytest.raises(VaultLockTimeout):
+        with vault_lock(root, timeout=0.2):
+            pass
+    release.set()
+    t.join()
+    with vault_lock(root, timeout=5):  # after release → acquirable again
+        pass
+
+
+def test_leftover_lock_file_does_not_block(tmp_path):
+    """A lock file left by a crashed process must not block anyone: the lock
+    lives in the OS, not in the file's existence."""
     root = tmp_path / "vault"
     (root / "Case-Learnings").mkdir(parents=True)
     lock = root / "Case-Learnings" / ".vault.lock"
-
-    # fresh foreign lock (another process holds it) → acquisition times out
     lock.write_text("999999", encoding="utf-8")
-    with pytest.raises(VaultLockTimeout):
-        with vault_lock(root, timeout=0.1):
-            pass
-
-    # old foreign lock (holder crashed) → reclaimed as stale
-    os.utime(lock, (0, 0))
-    with vault_lock(root, timeout=0.1):
+    with vault_lock(root, timeout=1.0):
         pass
-    assert not lock.exists()
+
+
+def test_killed_process_releases_lock_instantly(tmp_path):
+    """Crash availability: after the holder is killed, the next writer must
+    acquire immediately — no multi-second stale window."""
+    import subprocess
+    import sys
+
+    root = tmp_path / "vault"
+    (root / "Case-Learnings").mkdir(parents=True)
+    holder = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import time\n"
+            f"from agentbrain.locking import vault_lock\n"
+            f"from pathlib import Path\n"
+            f"with vault_lock(Path(r'{root}')):\n"
+            "    print('held', flush=True)\n"
+            "    time.sleep(30)\n",
+        ],
+        stdout=subprocess.PIPE,
+    )
+    try:
+        holder.stdout.readline()  # wait until the child actually holds it
+        with pytest.raises(VaultLockTimeout):
+            with vault_lock(root, timeout=0.3):
+                pass  # still held
+        holder.kill()
+        holder.wait(timeout=10)
+        import time as _t
+
+        t0 = _t.monotonic()
+        with vault_lock(root, timeout=10.0):
+            elapsed = _t.monotonic() - t0
+        assert elapsed < 5.0  # released by OS at process death, not after 60 s
+    finally:
+        if holder.poll() is None:
+            holder.kill()
 
 
 def test_concurrent_ingest_no_lost_lessons(vault: Vault):
@@ -155,8 +209,12 @@ def test_suggest_same_second_no_overwrite(vault: Vault):
 
 
 def test_lock_file_not_treated_as_lesson(vault: Vault):
-    # the lock file lives under Case-Learnings/, not Learnings/ — verify
+    # the lock file lives under Case-Learnings/, not Learnings/ — verify it
+    # exists while held, persists after release, and never enters the index
     lock = vault.root / "Case-Learnings" / ".vault.lock"
     with vault.locked():
         assert lock.exists()
-    assert not lock.exists()
+    assert lock.name not in vault.index_md.read_text(encoding="utf-8")
+    assert all(
+        l.lesson_id != ".vault" for l in vault.lessons(include_superseded=True)
+    )
