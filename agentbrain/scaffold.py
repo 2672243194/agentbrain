@@ -42,6 +42,7 @@ def init(root: Path | str, force: bool = False) -> str:
     demo = v.learnings_dir / "case-demo-lesson-01.md"
     files = [
         (v.root / "AGENTS.md", _tpl("AGENTS.md")),
+        (v.root / "ONBOARDING.md", _tpl("ONBOARDING.md")),
         (v.index_md, _tpl("Index.md")),
         (v.log_md, _tpl("log.md")),
         (immutable / "profile.md", _tpl("profile.md")),

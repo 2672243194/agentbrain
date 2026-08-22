@@ -1,5 +1,8 @@
 # AGENTS.md — How to use this memory vault
 
+> New to this vault? Read `ONBOARDING.md` first to get your access working,
+> then come back here.
+
 You (the AI agent) share this vault across all sessions and tools (Claude Code,
 Codex, OpenCode, Cursor, ...). Read this file at session start. It is small on purpose.
 
