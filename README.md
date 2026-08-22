@@ -224,6 +224,14 @@ executes them via `agentbrain apply`.
 
 ## Changelog
 
+- **0.4.3** — New `agentbrain rules` command: registers MCP and the tools become
+  *available*, but clients only call them if a rule tells them to. One command
+  now installs the memory discipline (query at task start, re-query on new
+  subtasks/errors, ingest at wrap-up with confirmation, secrets never) into the
+  client's own rule file — `--agent claude|codex|trae|cursor --write` writes
+  `CLAUDE.md` / `AGENTS.md` / `.trae/rules/` / `.cursor/rules/` (Cursor gets an
+  `alwaysApply` frontmatter block). Existing rule files are never overwritten —
+  the block is appended; re-runs are no-ops via a marker. 95 tests.
 - **0.4.2** — Self-service onboarding + hardening: new `ONBOARDING.md` in every
   vault routes first-time agents to the right access mode (MCP tools / shell /
   file-only) — onboarding a new agent is now just "read `AGENTS.md`";
