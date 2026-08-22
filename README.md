@@ -25,6 +25,8 @@ agentbrain doctor             # 自检：一切正常会显示 "Everything looks
 
 把上面 JSON（vault 路径换成你的）粘进任意 MCP 客户端（Claude Code / Codex / Cursor / DSH / Open WebUI…），重启客户端，完成。Agent 从此有了跨会话、跨工具的长期记忆。
 
+以后接入**新的** agent 不用你教：对它说一句「读 `AGENTS.md` 照做」即可——文件开头会把新来者引导到 `ONBOARDING.md`，它自己就能判断接入状态（已接 MCP / 只有 shell / 只能读文件）并完成配置或降级。
+
 Paste that JSON (with your vault path) into any MCP client and restart it — done. Your agents now share one long-term memory.
 
 [中文详细说明](#中文快速上手) · [English quickstart](#english-quickstart)
@@ -55,6 +57,7 @@ Paste that JSON (with your vault path) into any MCP client and restart it — do
 ```
 agentbrain/                    # vault root (git-friendly, Obsidian-friendly)
 ├─ AGENTS.md                     # rules every agent reads at session start
+├─ ONBOARDING.md                 # one-shot access setup for new agents
 ├─ Case-Learnings/
 │  ├─ Index.md                   # auto-generated lesson index (retrieval layer 1)
 │  ├─ log.md                     # append-only audit log
@@ -117,6 +120,11 @@ claude mcp add agentbrain -- agentbrain serve
 ```
 
 Vault 路径解析顺序：`--vault` 参数 > `AGENTBRAIN_VAULT` 环境变量 > `~/agentbrain`。
+
+Onboarding a **new** agent later needs no instructions from you: just tell it
+"read `AGENTS.md`" — the file routes first-timers to `ONBOARDING.md`, where they
+detect their own access mode (MCP tools / shell / file-only) and wire themselves
+up or fall back accordingly.
 
 ## English quickstart
 

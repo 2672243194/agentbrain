@@ -78,6 +78,28 @@ def test_ingest_refuses_credentials_in_summary(vault: Vault):
     assert vault.get("leak2-lesson-01") is None
 
 
+def test_ingest_refuses_credentials_in_case_id(vault: Vault):
+    out = memory_ingest(
+        case_id="leak-ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456",
+        lesson="harmless lesson body text",
+        tags=[],
+        vault=vault,
+    )
+    assert out.startswith("Refused:")
+    assert not any(p.name.startswith("leak-ghp") for p in vault.learnings_dir.glob("*.md"))
+
+
+def test_ingest_refuses_credentials_in_tags(vault: Vault):
+    out = memory_ingest(
+        case_id="leak3",
+        lesson="harmless lesson body text",
+        tags=["sk-abc123def456ghi789jkl"],
+        vault=vault,
+    )
+    assert out.startswith("Refused:")
+    assert vault.get("leak3-lesson-01") is None
+
+
 def test_ingest_accepts_placeholder_lessons(vault: Vault):
     out = memory_ingest(
         case_id="safe",

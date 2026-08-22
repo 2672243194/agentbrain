@@ -7,7 +7,6 @@ from pathlib import Path
 
 from .config import Config
 from .locking import atomic_write
-from .models import Lesson
 from .profile import Profile
 from .redact import redaction_hint, scan as scan_secrets
 from .retrieval import _days_since, search_lessons, tokenize
@@ -118,7 +117,13 @@ def memory_ingest(
         return str(e)
     if not lesson or not lesson.strip():
         return "Refused: empty lesson."
-    hits = scan_secrets(lesson) + scan_secrets(source_summary or "")
+    tags_text = tags if isinstance(tags, str) else " ".join(str(t) for t in (tags or []))
+    hits = (
+        scan_secrets(lesson)
+        + scan_secrets(source_summary or "")
+        + scan_secrets(case_id or "")
+        + scan_secrets(tags_text)
+    )
     if hits:
         return redaction_hint(hits)
 
@@ -140,14 +145,6 @@ def memory_ingest(
         f"Saved {lesson_obj.lesson_id} → {v.relpath(lesson_obj.path)}\n"
         f"tags: {', '.join(tags) or '-'} · confidence {confidence} · index & log updated"
     )
-
-
-def _similar(a: Lesson, b: Lesson) -> bool:
-    if _jaccard(set(tokenize(a.source_summary)), set(tokenize(b.source_summary))) >= 0.6:
-        return True
-    tags_sim = _jaccard(set(a.tags), set(b.tags))
-    content_sim = _jaccard(set(tokenize(a.content)), set(tokenize(b.content)))
-    return tags_sim >= 0.5 and content_sim >= 0.4
 
 
 def _similar_pre(

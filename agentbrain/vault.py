@@ -29,6 +29,20 @@ def _as_tags(value) -> list[str]:
     return []
 
 
+def _as_float(value, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default  # hand-edited frontmatter must not poison vault reads
+
+
+def _as_int(value, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 class Vault:
     def __init__(self, root: Path | str):
         self.root = Path(root).expanduser().resolve()
@@ -105,10 +119,10 @@ class Vault:
             created_at=str(meta.get("created_at", "")),
             last_verified_at=str(meta.get("last_verified_at", "")),
             valid_until=str(meta.get("valid_until", "") or ""),
-            confidence=float(meta.get("confidence") if meta.get("confidence") is not None else 0.8),
+            confidence=_as_float(meta.get("confidence"), 0.8),
             verified=bool(meta.get("verified", True)),
             superseded_by=str(meta.get("superseded_by", "") or ""),
-            use_count=int(meta.get("use_count") or 0),
+            use_count=_as_int(meta.get("use_count") or 0, 0),
             path=path,
         )
 
