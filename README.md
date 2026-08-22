@@ -201,6 +201,13 @@ executes them via `agentbrain apply`.
 
 ## Changelog
 
+- **0.4.2** — Self-service onboarding + hardening: new `ONBOARDING.md` in every
+  vault routes first-time agents to the right access mode (MCP tools / shell /
+  file-only) — onboarding a new agent is now just "read `AGENTS.md`";
+  `memory_ingest` also scans `case_id` and `tags` for credentials (previously
+  only lesson text and summary — a key smuggled into a filename or tag could
+  slip past); hand-edited frontmatter with non-numeric `confidence`/`use_count`
+  no longer breaks vault reads (per-field fallback to defaults). 87 tests.
 - **0.4.1** — Enforced secret redaction: `memory_ingest` scans content and
   summaries for credential-shaped patterns (OpenAI/Anthropic/GitHub/AWS/Slack/Google
   tokens, Bearer headers, private-key blocks, `password=`/`api_key=` assignments) and
