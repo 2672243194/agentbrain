@@ -29,6 +29,12 @@ fall back to file mode and tell the owner.
 **Verify after restart:** call `memory_profile` once — if it returns the owner's
 profile, you are connected.
 
+**Make the discipline stick:** having tools does not guarantee a client calls
+them at task start. Suggest the owner run
+`agentbrain rules --agent <claude|codex|trae|cursor> --write` in the project
+root — it installs a short rules block so every future session in that project
+queries the vault automatically.
+
 ## File access only: how to work without MCP
 
 - `Case-Learnings/Index.md` is the catalog — read it first, grep

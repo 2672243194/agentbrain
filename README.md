@@ -84,6 +84,7 @@ agentbrain lint                        # 体检：重复/过时/无标签/低置
 agentbrain apply lint-20260820-172206.md      # 人工审核后执行提案（自动归档）
 agentbrain distill                     # 分析 log 中重复出现的模式 → 生成提升提案
 agentbrain snapshot -m "手动备份"      # 手动提交快照（如用 Obsidian 手改文件后）
+agentbrain rules --agent trae --write  # 把记忆纪律写进客户端规则文件（项目根目录运行）
 ```
 
 > 说明：PyPI 包名为 `mnemosyne-lite`（`agentbrain` 在 PyPI 上与已有项目过于相似，无法注册）。
@@ -121,6 +122,14 @@ claude mcp add agentbrain -- agentbrain serve
 
 Vault 路径解析顺序：`--vault` 参数 > `AGENTBRAIN_VAULT` 环境变量 > `~/agentbrain`。
 
+注册 MCP 只让 agent **能**调记忆工具；要让它**每次会话主动**查库，再把纪律写进客户端的规则文件（在项目根目录运行，幂等可重复）：
+
+```bash
+agentbrain rules --agent claude --write   # 支持 claude / codex / trae / cursor
+```
+
+一条命令把「任务开始查库、中途遇到新问题再查、收尾存经验、密钥不入库」写进 `CLAUDE.md` / `AGENTS.md` / `.trae/rules/` / `.cursor/rules/`。
+
 Onboarding a **new** agent later needs no instructions from you: just tell it
 "read `AGENTS.md`" — the file routes first-timers to `ONBOARDING.md`, where they
 detect their own access mode (MCP tools / shell / file-only) and wire themselves
@@ -140,6 +149,7 @@ agentbrain lint                        # health check → consolidation proposal
 agentbrain apply lint-20260820-172206.md      # execute an approved proposal (archives it)
 agentbrain distill                     # recurring-pattern analysis → promotion proposals
 agentbrain snapshot -m "manual backup" # commit a snapshot (e.g. after hand-edits)
+agentbrain rules --agent claude --write # install memory discipline into the client's rule file
 agentbrain serve                       # start the MCP server on stdio
 ```
 
@@ -154,6 +164,19 @@ Codex CLI (`~/.codex/config.toml`):
 command = "agentbrain"
 args = ["serve"]
 ```
+
+Registering MCP makes the tools *available*; making the client *actually query*
+at task start takes one more line — write the discipline block into the
+project's rule file (run in the project root, idempotent):
+
+```bash
+agentbrain rules --agent claude --write   # claude / codex / trae / cursor
+```
+
+It installs a short "agentbrain memory discipline" section into `CLAUDE.md`,
+`AGENTS.md`, `.trae/rules/` or `.cursor/rules/`: query at task start, re-query
+on new subtasks/errors, ingest at wrap-up with user confirmation, no secrets
+ever.
 
 ## MCP tools
 

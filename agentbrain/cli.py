@@ -45,6 +45,21 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("path", help="Print resolved vault path")
     sub.add_parser("doctor", help="One-shot health check (vault, index, lock, snapshots)")
 
+    p = sub.add_parser(
+        "rules",
+        help="Print the agent-side memory discipline block, or write it into this project's rule file",
+    )
+    p.add_argument(
+        "--agent",
+        default="generic",
+        help="claude | codex | trae | cursor | generic (default: generic, prints to stdout)",
+    )
+    p.add_argument(
+        "--write",
+        action="store_true",
+        help="Write the rule file into the current directory instead of printing",
+    )
+
     p = sub.add_parser("snapshot", help="Commit all vault changes (e.g. after hand-editing files)")
     p.add_argument("-m", "--message", default="manual snapshot", help="Commit message")
 
@@ -69,6 +84,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "path":
         print(Config.load(args.vault).vault_dir)
+        return 0
+    if args.cmd == "rules":
+        from . import rules as rules_mod
+
+        if args.write:
+            if args.agent == "generic":
+                print("Nothing to write for 'generic' — it prints the block only.", file=sys.stderr)
+                return 2
+            print(rules_mod.write(args.agent, Path.cwd()))
+        else:
+            print(rules_mod.render(args.agent))
         return 0
     if args.cmd == "doctor":
         from .doctor import doctor
