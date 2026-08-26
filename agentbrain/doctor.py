@@ -5,6 +5,7 @@ import sys
 
 from . import __version__
 from .config import Config
+from .scaffold import template_status
 from .snapshot import Snapshot
 from .vault import Vault, VaultNotInitialized
 
@@ -84,6 +85,14 @@ def doctor(vault: Vault | None = None) -> str:
 
     entries = vault.log_entries()
     lines.append(f"log: {len(entries)} entries")
+
+    status = template_status(vault.root)
+    stale = [n for n, s in status.items() if s in ("legacy", "missing")]
+    if stale:
+        problems.append(
+            f"outdated vault templates ({', '.join(stale)}) — run: agentbrain upgrade"
+        )
+        lines.append(f"templates: OUTDATED — {', '.join(stale)}")
 
     if problems:
         lines.append("")

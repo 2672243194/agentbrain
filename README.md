@@ -88,6 +88,14 @@ agentbrain snapshot -m "手动备份"      # 手动提交快照（如用 Obsidia
 agentbrain rules --agent trae --write  # 把记忆纪律写进客户端规则文件（项目根目录运行）
 ```
 
+升级到新版本后（`pip install --upgrade mnemosyne-lite`）：
+
+```bash
+agentbrain upgrade                    # 刷新 vault 里的 AGENTS.md / ONBOARDING.md 模板
+agentbrain rules --agent trae --write # 刷新各项目规则文件里的纪律块（旧版会原地更新）
+# 然后重启你的 agent 客户端 —— MCP server 是进程启动时加载代码的
+```
+
 > 说明：PyPI 包名为 `mnemosyne-lite`（`agentbrain` 在 PyPI 上与已有项目过于相似，无法注册）。
 > 安装后的 CLI 命令与 Python 包名仍是 `agentbrain`，GitHub 仓库地址不变。
 
@@ -153,6 +161,14 @@ agentbrain distill                     # recurring-pattern analysis → promotio
 agentbrain snapshot -m "manual backup" # commit a snapshot (e.g. after hand-edits)
 agentbrain rules --agent claude --write # install memory discipline into the client's rule file
 agentbrain serve                       # start the MCP server on stdio
+```
+
+After upgrading the package (`pip install --upgrade mnemosyne-lite`):
+
+```bash
+agentbrain upgrade                     # refresh AGENTS.md / ONBOARDING.md templates in the vault
+agentbrain rules --agent claude --write # refresh the discipline block in project rule files
+# then restart your agent clients — MCP servers load code at process start
 ```
 
 > Note: the PyPI distribution name is `mnemosyne-lite` (`agentbrain` was rejected
@@ -226,17 +242,23 @@ executes them via `agentbrain apply`.
 
 ## Changelog
 
-- **0.4.4** — Autonomy + robustness round. Agents now ingest lessons
-  autonomously and recall them without being told: MCP tool descriptions
-  (always in the client's context once the server is registered) directly
-  instruct when to query — task start, new subtask/error mid-task, before
-  debugging — and to ingest the moment something is learned, with no user
-  approval needed; the installed rule block and `AGENTS.md` say the same, and
-  an empty `memory_query` result now suggests retrying with broader keywords
-  or the other language before concluding nothing is stored. New
-  `agentbrain verify <id>` marks a lesson as re-verified today — the remedy
-  for the STALE finding lint reports. `memory_ingest` warns when a
-  near-duplicate active lesson exists (summary Jaccard ≥ 0.6), so repeated
+- **0.4.4** — Autonomy + upgrade path + robustness round. Agents now ingest
+  lessons autonomously and recall them without being told: MCP tool
+  descriptions (always in the client's context once the server is registered)
+  directly instruct when to query — task start, new subtask/error mid-task,
+  before debugging — and to ingest the moment something is learned, with no
+  user approval needed; the installed rule block and `AGENTS.md` say the same,
+  and an empty `memory_query` result now suggests retrying with broader
+  keywords or the other language before concluding nothing is stored.
+  Upgrades no longer strand old versions in existing installs: new
+  `agentbrain upgrade` refreshes vault templates (`AGENTS.md`,
+  `ONBOARDING.md`) — files that match a previously shipped template are
+  updated in place, customized ones are kept and reported; `agentbrain rules
+  --write` now refreshes an outdated discipline block in place (marker-based,
+  never touching surrounding user content); `doctor` reports outdated
+  templates. New `agentbrain verify <id>` marks a lesson as re-verified today
+  — the remedy for the STALE finding lint reports. `memory_ingest` warns when
+  a near-duplicate active lesson exists (summary Jaccard ≥ 0.6), so repeated
   ingests surface immediately instead of waiting for the weekly lint.
   Redaction false positives fixed: 40-char git SHA-1 digests and Bearer-shaped
   English prose no longer trip the AWS-secret/Bearer patterns (real secrets
@@ -247,7 +269,7 @@ executes them via `agentbrain apply`.
   path-too-long error; `verified: 'false'` in quoted frontmatter parses as
   false; lint now also scans tags and case ids for secrets (same scope as
   ingest); rule-file writes and git snapshot output decoding are hardened.
-  111 tests.
+  122 tests.
 - **0.4.3** — New `agentbrain rules` command: registers MCP and the tools become
   *available*, but clients only call them if a rule tells them to. One command
   now installs the memory discipline (query at task start, re-query on new

@@ -42,4 +42,4 @@ agentbrain = "agentbrain.cli:main"
 include = ["agentbrain*"]
 
 [tool.setuptools.package-data]
-agentbrain = ["templates/*.md"]
+agentbrain = ["templates/*.md", "templates/legacy/*.md"]

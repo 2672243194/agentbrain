@@ -44,6 +44,10 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("index", help="Rebuild Case-Learnings/Index.md")
     sub.add_parser("path", help="Print resolved vault path")
     sub.add_parser("doctor", help="One-shot health check (vault, index, lock, snapshots)")
+    sub.add_parser(
+        "upgrade",
+        help="Refresh shipped vault templates (AGENTS.md / ONBOARDING.md) to the current version",
+    )
 
     p = sub.add_parser(
         "verify",
@@ -111,6 +115,10 @@ def main(argv: list[str] | None = None) -> int:
             print(doctor())
             return 2
         print(doctor(v))
+        return 0
+    if args.cmd == "upgrade":
+        cfg = Config.load(args.vault)
+        print(scaffold.upgrade(Path(cfg.vault_dir)))
         return 0
     if args.cmd == "snapshot":
         from .snapshot import Snapshot
