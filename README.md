@@ -86,6 +86,7 @@ agentbrain verify my-case-lesson-01    # 重新确认某条经验仍然有效（
 agentbrain distill                     # 分析 log 中重复出现的模式 → 生成提升提案
 agentbrain snapshot -m "手动备份"      # 手动提交快照（如用 Obsidian 手改文件后）
 agentbrain rules --agent trae --write  # 把记忆纪律写进客户端规则文件（项目根目录运行）
+agentbrain rules --agent claude --write --global  # 写进用户级全局规则，所有项目生效
 ```
 
 升级到新版本后（`pip install --upgrade mnemosyne-lite`）：
@@ -134,10 +135,11 @@ Vault 路径解析顺序：`--vault` 参数 > `AGENTBRAIN_VAULT` 环境变量 > 
 注册 MCP 只让 agent **能**调记忆工具；要让它**每次会话主动**查库，再把纪律写进客户端的规则文件（在项目根目录运行，幂等可重复）：
 
 ```bash
-agentbrain rules --agent claude --write   # 支持 claude / codex / trae / cursor
+agentbrain rules --agent claude --write   # 支持 claude / codex / trae / cursor（项目级）
+agentbrain rules --agent claude --write --global  # 用户级全局（~/.claude/CLAUDE.md），一次配置所有项目生效
 ```
 
-一条命令把「任务开始查库、中途遇到新问题再查、学到就自主入库（无需确认）、密钥不入库」写进 `CLAUDE.md` / `AGENTS.md` / `.trae/rules/` / `.cursor/rules/`。
+一条命令把「任务开始查库、中途遇到新问题再查、学到就自主入库（无需确认）、密钥不入库」写进 `CLAUDE.md` / `AGENTS.md` / `.trae/rules/` / `.cursor/rules/`。TRAE 和 Cursor 的全局规则在各自设置界面里，不走文件；claude / codex 支持 `--global`。
 
 Onboarding a **new** agent later needs no instructions from you: just tell it
 "read `AGENTS.md`" — the file routes first-timers to `ONBOARDING.md`, where they
@@ -188,13 +190,15 @@ at task start takes one more line — write the discipline block into the
 project's rule file (run in the project root, idempotent):
 
 ```bash
-agentbrain rules --agent claude --write   # claude / codex / trae / cursor
+agentbrain rules --agent claude --write   # claude / codex / trae / cursor (per-project)
+agentbrain rules --agent claude --write --global  # user-level (~/.claude/CLAUDE.md), all projects
 ```
 
 It installs a short "agentbrain memory discipline" section into `CLAUDE.md`,
 `AGENTS.md`, `.trae/rules/` or `.cursor/rules/`: query at task start, re-query
 on new subtasks/errors, ingest autonomously when something is learned, no
-secrets ever.
+secrets ever. TRAE and Cursor keep their global rules in their settings UIs;
+claude and codex support `--global`.
 
 ## MCP tools
 
@@ -255,8 +259,10 @@ executes them via `agentbrain apply`.
   `ONBOARDING.md`) — files that match a previously shipped template are
   updated in place, customized ones are kept and reported; `agentbrain rules
   --write` now refreshes an outdated discipline block in place (marker-based,
-  never touching surrounding user content); `doctor` reports outdated
-  templates. New `agentbrain verify <id>` marks a lesson as re-verified today
+  never touching surrounding user content), and `--global` writes the
+  user-level rule file (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`) so the
+  discipline applies to every project instead of one; `doctor` reports
+  outdated templates. New `agentbrain verify <id>` marks a lesson as re-verified today
   — the remedy for the STALE finding lint reports. `memory_ingest` warns when
   a near-duplicate active lesson exists (summary Jaccard ≥ 0.6), so repeated
   ingests surface immediately instead of waiting for the weekly lint.
@@ -269,7 +275,7 @@ executes them via `agentbrain apply`.
   path-too-long error; `verified: 'false'` in quoted frontmatter parses as
   false; lint now also scans tags and case ids for secrets (same scope as
   ingest); rule-file writes and git snapshot output decoding are hardened.
-  122 tests.
+  127 tests.
 - **0.4.3** — New `agentbrain rules` command: registers MCP and the tools become
   *available*, but clients only call them if a rule tells them to. One command
   now installs the memory discipline (query at task start, re-query on new

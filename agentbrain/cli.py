@@ -69,6 +69,13 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Write the rule file into the current directory instead of printing",
     )
+    p.add_argument(
+        "--global",
+        dest="global_",
+        action="store_true",
+        help="Write to the user-level global rule file instead of the project "
+        "(claude: ~/.claude/CLAUDE.md, codex: ~/.codex/AGENTS.md; applies to all projects)",
+    )
 
     p = sub.add_parser("snapshot", help="Commit all vault changes (e.g. after hand-editing files)")
     p.add_argument("-m", "--message", default="manual snapshot", help="Commit message")
@@ -102,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.agent == "generic":
                 print("Nothing to write for 'generic' — it prints the block only.", file=sys.stderr)
                 return 2
-            print(rules_mod.write(args.agent, Path.cwd()))
+            print(rules_mod.write(args.agent, Path.cwd(), global_=args.global_))
         else:
             print(rules_mod.render(args.agent))
         return 0

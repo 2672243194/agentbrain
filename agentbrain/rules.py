@@ -54,15 +54,18 @@ alwaysApply: true
 
 
 class Target:
-    def __init__(self, name: str, relpath: str, block: str = RULE_BLOCK):
+    def __init__(self, name: str, relpath: str, block: str = RULE_BLOCK, home_relpath: str | None = None):
         self.name = name
         self.relpath = relpath
         self.block = block
+        # Path relative to the user's home directory for a machine-wide rule,
+        # or None when the client has no file-based global rules.
+        self.home_relpath = home_relpath
 
 
 TARGETS: dict[str, Target] = {
-    "claude": Target("claude", "CLAUDE.md"),
-    "codex": Target("codex", "AGENTS.md"),
+    "claude": Target("claude", "CLAUDE.md", home_relpath=".claude/CLAUDE.md"),
+    "codex": Target("codex", "AGENTS.md", home_relpath=".codex/AGENTS.md"),
     "trae": Target("trae", ".trae/rules/project_rules.md"),
     "cursor": Target("cursor", ".cursor/rules/agentbrain.mdc", block=MDC_BLOCK),
 }
@@ -98,8 +101,9 @@ def _norm(s: str) -> str:
     return s.strip()
 
 
-def write(agent: str, project_root: Path) -> str:
-    """Write the rule block into the project. Idempotent via MARKER.
+def write(agent: str, project_root: Path, global_: bool = False) -> str:
+    """Write the rule block into the project (or the user's home directory
+    when global_). Idempotent via MARKER.
 
     Existing files are never overwritten — rule files may hold the user's own
     content. When the marker block is present but outdated (it matches a block
@@ -110,28 +114,39 @@ def write(agent: str, project_root: Path) -> str:
     if t is None:
         known = ", ".join(sorted(TARGETS))
         return f"Unknown agent '{agent}'. Known: {known}. Use 'generic' to print the block."
-    path = project_root / t.relpath
+    if global_:
+        if t.home_relpath is None:
+            return (
+                f"{t.name} has no file-based global rules (they live in its settings UI). "
+                f"Write per-project instead: agentbrain rules --agent {t.name} --write "
+                "(run at the project root)."
+            )
+        path = Path.home() / t.home_relpath
+        where = "global"
+    else:
+        path = project_root / t.relpath
+        where = "project"
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write(path, t.block)
-        return f"Wrote {MARKER} -> {path}"
+        return f"Wrote {MARKER} ({where}) -> {path}"
     existing = path.read_text(encoding="utf-8-sig")
     span = _find_block(existing)
     if span is None:
         atomic_write(path, existing.rstrip("\n") + "\n\n" + t.block)
-        return f"Wrote {MARKER} -> {path}"
+        return f"Wrote {MARKER} ({where}) -> {path}"
     start, end = span
     lines = existing.splitlines(keepends=True)
     old_block = "".join(lines[start:end])
     if _norm(old_block) == _norm(RULE_BLOCK):
-        return f"Already present and current: {path}"
+        return f"Already present and current ({where}): {path}"
     if any(_norm(old_block) == _norm(b) for b in LEGACY_BLOCKS):
         head = "".join(lines[:start])
         tail = "".join(lines[end:])
         replacement = RULE_BLOCK if tail.strip() else RULE_BLOCK.rstrip("\n") + "\n"
         atomic_write(path, head + replacement + tail)
-        return f"Updated outdated {MARKER} block -> {path}"
+        return f"Updated outdated {MARKER} block ({where}) -> {path}"
     return (
-        f"Block present but customized: {path} — review and update it by hand "
+        f"Block present but customized ({where}): {path} — review and update it by hand "
         f"(current block: `agentbrain rules --agent {t.name}`)"
     )

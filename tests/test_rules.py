@@ -68,3 +68,54 @@ def test_write_unknown_agent_reports_known_names(tmp_path: Path):
     assert "Unknown agent" in out
     assert "trae" in out
     assert not (tmp_path / "CLAUDE.md").exists()
+
+
+def test_write_global_claude_targets_home(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    out = rules.write("claude", tmp_path, global_=True)
+    path = tmp_path / ".claude" / "CLAUDE.md"
+    assert path.is_file()
+    assert "(global)" in out
+    assert str(path) in out
+    assert rules.MARKER in path.read_text(encoding="utf-8")
+
+
+def test_write_global_codex_targets_home(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    existing = tmp_path / ".codex" / "AGENTS.md"
+    existing.parent.mkdir(parents=True)
+    existing.write_text("# Global instructions\n\nBe terse.\n", encoding="utf-8")
+    out = rules.write("codex", tmp_path, global_=True)
+    merged = existing.read_text(encoding="utf-8")
+    assert "Be terse." in merged
+    assert rules.MARKER in merged
+    assert "(global)" in out
+    rules.write("codex", tmp_path, global_=True)  # idempotent
+    assert existing.read_text(encoding="utf-8") == merged
+
+
+def test_write_global_refreshes_outdated_block(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+    p = tmp_path / ".claude" / "CLAUDE.md"
+    p.parent.mkdir(parents=True)
+    p.write_text("# Global\n\n" + rules.LEGACY_BLOCKS[0], encoding="utf-8")
+    out = rules.write("claude", tmp_path, global_=True)
+    assert "Updated outdated" in out
+    assert "(global)" in out
+    text = p.read_text(encoding="utf-8")
+    assert text.startswith("# Global")
+    assert "with user confirmation" not in text
+
+
+def test_write_global_unsupported_agent_explains(tmp_path: Path):
+    out = rules.write("trae", tmp_path, global_=True)
+    assert "no file-based global rules" in out
+    out = rules.write("cursor", tmp_path, global_=True)
+    assert "no file-based global rules" in out
+
+
+def test_write_global_does_not_touch_project_file(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path / "home"))
+    rules.write("claude", tmp_path, global_=True)
+    assert (tmp_path / "home" / ".claude" / "CLAUDE.md").is_file()
+    assert not (tmp_path / "CLAUDE.md").exists()
