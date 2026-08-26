@@ -49,7 +49,7 @@ def doctor(vault: Vault | None = None) -> str:
     lines.append(f"lessons: {len(active)} active" + (f" · {superseded} superseded" if superseded else ""))
 
     index_text = (
-        vault.index_md.read_text(encoding="utf-8") if vault.index_md.is_file() else ""
+        vault.index_md.read_text(encoding="utf-8-sig") if vault.index_md.is_file() else ""
     )
     missing = [l.lesson_id for l in active if l.lesson_id not in index_text]
     if missing:

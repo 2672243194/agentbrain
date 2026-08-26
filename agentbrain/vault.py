@@ -43,6 +43,14 @@ def _as_int(value, default: int) -> int:
         return default
 
 
+def _as_bool(value, default: bool = True) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip().lower() not in ("false", "no", "0", "off")
+    return bool(value)
+
+
 class Vault:
     def __init__(self, root: Path | str):
         self.root = Path(root).expanduser().resolve()
@@ -100,7 +108,7 @@ class Vault:
 
     def load_lesson(self, path: Path) -> Lesson | None:
         try:
-            text = path.read_text(encoding="utf-8")
+            text = path.read_text(encoding="utf-8-sig")  # tolerate a BOM from Windows editors
         except OSError:
             return None
         if not text.startswith("---"):
@@ -120,7 +128,7 @@ class Vault:
             last_verified_at=str(meta.get("last_verified_at", "")),
             valid_until=str(meta.get("valid_until", "") or ""),
             confidence=_as_float(meta.get("confidence"), 0.8),
-            verified=bool(meta.get("verified", True)),
+            verified=_as_bool(meta.get("verified"), True),
             superseded_by=str(meta.get("superseded_by", "") or ""),
             use_count=_as_int(meta.get("use_count") or 0, 0),
             path=path,
@@ -203,6 +211,29 @@ class Vault:
                 self._save_locked(lesson, rebuild=False)
             self._rebuild_index_locked()
 
+    def verify(self, lesson_ids: list[str]) -> tuple[list[str], list[str]]:
+        """Stamp last_verified_at with today for the given lessons.
+
+        Returns (verified_ids, missing_ids). Owner-facing remedy for the STALE
+        finding lint reports; agents never call this.
+        """
+        today = dt.date.today().strftime(_DATE)
+        verified: list[str] = []
+        missing: list[str] = []
+        with self.locked():
+            for lesson_id in lesson_ids:
+                lesson = self.get(lesson_id)
+                if lesson is None:
+                    missing.append(lesson_id)
+                    continue
+                lesson.last_verified_at = today
+                self._save_locked(lesson, action="verify", rebuild=False)
+                verified.append(lesson_id)
+            if verified:
+                self._rebuild_index_locked()
+                self._snapshot_locked(f"verify: {len(verified)} lesson(s)")
+        return verified, missing
+
     # --- index ---
 
     def rebuild_index(self, lessons: list[Lesson] | None = None) -> None:
@@ -249,7 +280,7 @@ class Vault:
         entries: list[dict] = []
         if not self.log_md.is_file():
             return entries
-        for line in self.log_md.read_text(encoding="utf-8").splitlines():
+        for line in self.log_md.read_text(encoding="utf-8-sig").splitlines():
             m = _LOG_RE.match(line.strip())
             if not m:
                 continue

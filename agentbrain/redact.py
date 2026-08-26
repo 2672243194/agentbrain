@@ -13,7 +13,10 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("Slack token (xox…)", re.compile(r"\bxox[baprs]-[A-Za-z0-9\-]{10,}\b")),
     ("Google API key (AIza…)", re.compile(r"\bAIza[0-9A-Za-z_\-]{35}\b")),
     ("PyPI token", re.compile(r"\bpypi-[A-Za-z0-9_\-]{20,}\b")),
-    ("Bearer header", re.compile(r"\bBearer\s+[A-Za-z0-9_\-\.=/+]{20,}", re.IGNORECASE)),
+    ("Bearer header", re.compile(
+        r"\bBearer\s+(?=[A-Za-z0-9_\-\.=/+]{20,})(?=[A-Za-z0-9_\-\.=/+]*\d)[A-Za-z0-9_\-\.=/+]+",
+        re.IGNORECASE,
+    )),
     ("Private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
     ("Generic key=value assignment", re.compile(
         r"\b(?:password|passwd|pwd|api[_-]?key|apikey|secret|token|access[_-]?key)"
@@ -33,12 +36,16 @@ _WHITELIST_HINT = (
     "Replace the value with an env-var reference, e.g. ${ENV:VAR_NAME}."
 )
 
+_AWS_SECRET_KIND = "AWS secret key (40-char base64)"
+_HEX_RUN = re.compile(r"[0-9a-fA-F]+")
+
 
 def scan(text: str) -> list[tuple[str, str]]:
     """Return [(kind, matched_text)] for credential-looking substrings.
 
     Placeholder forms (${ENV:VAR}, sk-xxx, <your-key>, …) are exempt: teaching
-    examples and references must ingest fine.
+    examples and references must ingest fine. A 40-char pure-hex run is a git
+    SHA-1 / SHA-1 digest shape, not an AWS secret, so it is exempt too.
     """
     if not text:
         return []
@@ -51,6 +58,8 @@ def scan(text: str) -> list[tuple[str, str]]:
         for m in rx.finditer(text):
             s, e = m.span()
             if any(s < we and ws < e for ws, we in exempt_spans):
+                continue
+            if kind == _AWS_SECRET_KIND and _HEX_RUN.fullmatch(m.group(0)):
                 continue
             snippet = m.group(0)
             snippet = snippet[:12] + "…" if len(snippet) > 12 else snippet

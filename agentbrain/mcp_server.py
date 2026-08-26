@@ -87,7 +87,7 @@ def _rules_resource() -> str:
     if v is None:
         return "Vault not initialized. Run: agentbrain init"
     p = v.root / "AGENTS.md"
-    return p.read_text(encoding="utf-8") if p.is_file() else "AGENTS.md not found."
+    return p.read_text(encoding="utf-8-sig") if p.is_file() else "AGENTS.md not found."
 
 
 @mcp.resource("agentbrain://index", description="Lesson index — retrieval layer 1 (Case-Learnings/Index.md)")
@@ -96,7 +96,7 @@ def _index_resource() -> str:
     if v is None:
         return "Vault not initialized. Run: agentbrain init"
     if v.index_md.is_file():
-        return v.index_md.read_text(encoding="utf-8")
+        return v.index_md.read_text(encoding="utf-8-sig")
     return "Index.md not found yet — ingest a lesson first."
 
 

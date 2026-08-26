@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .locking import atomic_write
+
 MARKER = "agentbrain memory discipline"
 
 RULE_BLOCK = """## agentbrain memory discipline
@@ -66,11 +68,11 @@ def write(agent: str, project_root: Path) -> str:
         return f"Unknown agent '{agent}'. Known: {known}. Use 'generic' to print the block."
     path = project_root / t.relpath
     if path.exists():
-        existing = path.read_text(encoding="utf-8")
+        existing = path.read_text(encoding="utf-8-sig")
         if MARKER in existing:
             return f"Already present: {path} (marker found, nothing written)"
-        path.write_text(existing.rstrip("\n") + "\n\n" + t.block, encoding="utf-8")
+        atomic_write(path, existing.rstrip("\n") + "\n\n" + t.block)
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(t.block, encoding="utf-8")
+        atomic_write(path, t.block)
     return f"Wrote {MARKER} -> {path}"

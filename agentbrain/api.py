@@ -14,6 +14,7 @@ from .vault import Vault, VaultNotInitialized
 
 _SUMMARY_CHARS = 160
 _UNSAFE_CASE = re.compile(r'[\\/:*?"<>|\s]+')
+_CASE_ID_MAX = 48  # keeps lesson filenames within Windows path limits on long case ids
 
 
 def _open_vault(vault: Vault | None) -> Vault:
@@ -26,7 +27,7 @@ def _oneline(text: str, n: int) -> str:
 
 
 def _clean_case_id(case_id: str) -> str:
-    cid = _UNSAFE_CASE.sub("-", (case_id or "").strip())
+    cid = _UNSAFE_CASE.sub("-", (case_id or "").strip())[:_CASE_ID_MAX]
     return cid or "misc"
 
 
@@ -139,12 +140,24 @@ def memory_ingest(
             tags=tags,
             confidence=confidence,
         )
+        summary_tokens = set(tokenize(lesson_obj.source_summary))
+        similar = [
+            l.lesson_id
+            for l in v.lessons()
+            if _jaccard(summary_tokens, set(tokenize(l.source_summary))) >= 0.6
+        ]
         v._save_locked(lesson_obj, action="ingest")
         v._snapshot_locked(f"ingest: {lesson_obj.lesson_id}")
-    return (
+    out = (
         f"Saved {lesson_obj.lesson_id} → {v.relpath(lesson_obj.path)}\n"
         f"tags: {', '.join(tags) or '-'} · confidence {confidence} · index & log updated"
     )
+    if similar:
+        out += (
+            f"\nnote: similar active lesson(s) exist — {', '.join(similar[:3])}"
+            " (a merge proposal appears in the next lint run)"
+        )
+    return out
 
 
 def _similar_pre(
@@ -208,7 +221,9 @@ def memory_lint(scope: str = "all", vault: Vault | None = None) -> str:
             findings.append(f"LOWCONF {l.lesson_id} (confidence {l.confidence})")
         if l.superseded_by and l.superseded_by not in all_ids:
             findings.append(f"DANGLING {l.lesson_id} → missing {l.superseded_by}")
-        for kind, _ in scan_secrets(l.content + "\n" + l.source_summary):
+        for kind, _ in scan_secrets(
+            "\n".join([l.content, l.source_summary, " ".join(l.tags), l.case_id])
+        ):
             findings.append(
                 f"SECRET {l.lesson_id} ({kind}) — redact to ${{ENV:VAR}} by hand; "
                 "lint never modifies files"

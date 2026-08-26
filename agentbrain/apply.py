@@ -51,7 +51,7 @@ def apply_proposal(vault: Vault, proposal: str | Path) -> str:
     if p.stem.endswith(".applied"):
         raise ProposalError(f"Proposal already applied: {vault.relpath(p)}")
 
-    directives = parse_directives(p.read_text(encoding="utf-8"))
+    directives = parse_directives(p.read_text(encoding="utf-8-sig"))
     if not directives:
         raise ProposalError(
             "No 'supersede' directives found in this proposal. "

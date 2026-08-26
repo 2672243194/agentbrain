@@ -28,7 +28,7 @@ class Profile:
             if p.name.lower() == "readme.md":
                 continue
             try:
-                text = p.read_text(encoding="utf-8").strip()
+                text = p.read_text(encoding="utf-8-sig").strip()
             except OSError:
                 continue
             if text:

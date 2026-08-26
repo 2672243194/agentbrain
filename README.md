@@ -82,6 +82,7 @@ agentbrain profile                     # 查看个人偏好（Immutable + Mutabl
 agentbrain suggest --title "回复用中文" --change "偏好简洁的中文回复"    # 提交偏好建议
 agentbrain lint                        # 体检：重复/过时/无标签/低置信度 → 生成整合提案
 agentbrain apply lint-20260820-172206.md      # 人工审核后执行提案（自动归档）
+agentbrain verify my-case-lesson-01    # 重新确认某条经验仍然有效（消除 lint 的 STALE）
 agentbrain distill                     # 分析 log 中重复出现的模式 → 生成提升提案
 agentbrain snapshot -m "手动备份"      # 手动提交快照（如用 Obsidian 手改文件后）
 agentbrain rules --agent trae --write  # 把记忆纪律写进客户端规则文件（项目根目录运行）
@@ -147,6 +148,7 @@ agentbrain profile                     # print the owner profile
 agentbrain suggest --title "Short replies" --change "Keep answers under 3 sentences."
 agentbrain lint                        # health check → consolidation proposals
 agentbrain apply lint-20260820-172206.md      # execute an approved proposal (archives it)
+agentbrain verify my-case-lesson-01    # re-confirm a lesson is still valid (clears STALE)
 agentbrain distill                     # recurring-pattern analysis → promotion proposals
 agentbrain snapshot -m "manual backup" # commit a snapshot (e.g. after hand-edits)
 agentbrain rules --agent claude --write # install memory discipline into the client's rule file
@@ -224,6 +226,21 @@ executes them via `agentbrain apply`.
 
 ## Changelog
 
+- **0.4.4** — Robustness + usability round. New `agentbrain verify <id>` marks
+  a lesson as re-verified today — the remedy for the STALE finding lint reports
+  (previously hand-editing was the only option). `memory_ingest` now warns when
+  a near-duplicate active lesson exists (summary Jaccard ≥ 0.6), so repeated
+  ingests surface immediately instead of waiting for the weekly lint. Redaction
+  false positives fixed: 40-char git SHA-1 digests and Bearer-shaped English
+  prose no longer trip the AWS-secret/Bearer patterns (real secrets still do).
+  Lesson files saved with a UTF-8 BOM by Windows editors (Notepad) are now
+  read correctly instead of silently vanishing from the index; the same
+  BOM tolerance applies to profiles, logs, proposals and MCP resources.
+  Long case ids are truncated (48 chars) instead of crashing with a
+  path-too-long error; `verified: 'false'` in quoted frontmatter parses as
+  false; lint now also scans tags and case ids for secrets (same scope as
+  ingest); rule-file writes and git snapshot output decoding are hardened.
+  107 tests.
 - **0.4.3** — New `agentbrain rules` command: registers MCP and the tools become
   *available*, but clients only call them if a rule tells them to. One command
   now installs the memory discipline (query at task start, re-query on new

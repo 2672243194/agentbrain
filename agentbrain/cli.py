@@ -46,6 +46,12 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor", help="One-shot health check (vault, index, lock, snapshots)")
 
     p = sub.add_parser(
+        "verify",
+        help="Mark lesson(s) as re-verified today (updates last_verified_at; clears STALE lint findings)",
+    )
+    p.add_argument("ids", nargs="+", help="Lesson id(s), e.g. my-case-lesson-01")
+
+    p = sub.add_parser(
         "rules",
         help="Print the agent-side memory discipline block, or write it into this project's rule file",
     )
@@ -148,6 +154,13 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "index":
         vault.rebuild_index()
         print(f"Index rebuilt: {vault.relpath(vault.index_md)}")
+    elif args.cmd == "verify":
+        verified, missing = vault.verify(args.ids)
+        if verified:
+            print(f"Verified {len(verified)} lesson(s): {', '.join(verified)}")
+        if missing:
+            print(f"Not found: {', '.join(missing)}", file=sys.stderr)
+            return 1 if verified else 2
     elif args.cmd == "profile":
         print(api.memory_profile(vault=vault))
     elif args.cmd == "suggest":
