@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import datetime as dt
 
-from agentbrain.api import memory_ingest, memory_lint
+from agentbrain.api import memory_ingest, memory_lint, memory_query
 from agentbrain.redact import scan
 from agentbrain.retrieval import search_lessons
+from agentbrain.rules import RULE_BLOCK
 from agentbrain.vault import Vault
 
 _SHA1 = "686e4c9a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e"
@@ -150,3 +151,34 @@ def test_ingest_distinct_summaries_get_no_warning(vault: Vault):
         vault=vault,
     )
     assert "note:" not in out
+
+
+def test_rule_block_grants_autonomous_ingest():
+    block = " ".join(RULE_BLOCK.split())  # collapse line wraps
+    assert "no user approval needed" in block
+    assert "with user confirmation" not in block
+    assert "immediately" in block
+    assert "error" in block  # mid-task re-query trigger
+
+
+def test_rule_block_teaches_retry_on_empty():
+    assert "broader keywords" in " ".join(RULE_BLOCK.split())
+
+
+def test_query_no_match_message_suggests_retry(vault: Vault):
+    out = memory_query("zzzunmatchedqueryxyz", vault=vault)
+    assert "No lessons matched" in out
+    assert "broader keywords" in out
+    assert "Chinese" in out
+
+
+def test_mcp_tool_descriptions_direct_recall_and_autonomy():
+    from agentbrain import mcp_server
+
+    q = " ".join(mcp_server.memory_query.__doc__.split())
+    assert "task start" in q
+    assert "before debugging" in q
+    assert "Retry" in q
+    i = " ".join(mcp_server.memory_ingest.__doc__.split())
+    assert "autonomously" in i
+    assert "do not wait for user approval" in i

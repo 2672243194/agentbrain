@@ -14,9 +14,12 @@ mcp = _Server("agentbrain")
 
 
 def memory_query(query: str, top_k: int = 5, mode: str = "index") -> str:
-    """Search long-term memory lessons. Call at task start.
-    mode='index' (default) returns compact hits: id, summary, tags, path, gist.
-    mode='full' additionally returns the full text of the top hits."""
+    """Search long-term memory for lessons from earlier tasks. Call at task
+    start with the task topic, again whenever a new subtask, an error or an
+    unfamiliar topic appears mid-task, and before debugging anything — a prior
+    lesson may already hold the answer. mode='index' (default) returns compact
+    hits: id, summary, tags, path, gist; mode='full' adds the full text.
+    No match? Retry once with broader keywords or the other language."""
     return api.memory_query(query=query, top_k=top_k, mode=mode)
 
 
@@ -27,9 +30,12 @@ def memory_ingest(
     confidence: float = 0.8,
     source_summary: str | None = None,
 ) -> str:
-    """Save a reusable lesson to long-term memory. Call when the task revealed
-    something worth remembering: facts + applicable scenario + fix, <= 30 lines.
-    Creates a new file only — never edits existing lessons."""
+    """Save a reusable lesson to long-term memory. Call autonomously the moment
+    the task teaches something worth keeping (pitfall, working approach,
+    corrected assumption) — do not wait for user approval or session end:
+    facts + applicable scenario + fix, <= 30 lines, no storytelling. Creates a
+    new file only — never edits existing lessons; near-duplicates are flagged;
+    credential-shaped content is refused automatically."""
     return api.memory_ingest(
         case_id=case_id,
         lesson=lesson,

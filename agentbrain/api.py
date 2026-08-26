@@ -85,8 +85,9 @@ def memory_query(
     hits = ranked[: max(1, top_k)]
     if not hits:
         return (
-            "No lessons matched. If this task produces a reusable lesson, "
-            "call memory_ingest when done."
+            "No lessons matched — retry once with broader keywords or the other "
+            "language (Chinese ↔ English) before concluding nothing is stored. "
+            "If this task produces a reusable lesson, call memory_ingest when done."
         )
 
     lines = [f"{len(hits)} lesson(s) matched (mode={mode}):", ""]

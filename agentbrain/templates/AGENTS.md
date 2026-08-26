@@ -23,10 +23,15 @@ Codex, OpenCode, Cursor, ...). Read this file at session start. It is small on p
 1. **Know the owner** — call `memory_profile` once per session (or read resource
    `agentbrain://profile`) and tailor language, tone and formatting accordingly.
 2. **Task start** — call `memory_query` with the task topic (`top_k=5`).
+   Mid-task, re-query on any new subtask, error or unfamiliar topic — a stored
+   lesson may already hold the fix; retry with broader keywords or the other
+   language before concluding nothing is stored.
    If MCP tools are unavailable, read `Case-Learnings/Index.md` and grep `Learnings/`.
 3. **Before answering** — open the top 1–3 candidate lesson files in full.
 4. **During the task** — NEVER edit or delete existing lessons. Create new ones only.
-5. **When you learn something reusable** — call `memory_ingest` immediately.
+5. **When you learn something reusable** — call `memory_ingest` immediately and
+   autonomously, no owner confirmation needed (low-value lessons simply rank
+   low and get cleaned by lint — waiting for approval loses more than it saves).
    One lesson = one file = facts + applicable scenario + fix, ≤ 30 lines, no storytelling.
 6. **Observed a preference?** — call `memory_suggest` with a short title and the
    proposed change. Never edit `Agent-Profile/` yourself; the owner reviews

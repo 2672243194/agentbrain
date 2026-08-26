@@ -129,7 +129,7 @@ Vault 路径解析顺序：`--vault` 参数 > `AGENTBRAIN_VAULT` 环境变量 > 
 agentbrain rules --agent claude --write   # 支持 claude / codex / trae / cursor
 ```
 
-一条命令把「任务开始查库、中途遇到新问题再查、收尾存经验、密钥不入库」写进 `CLAUDE.md` / `AGENTS.md` / `.trae/rules/` / `.cursor/rules/`。
+一条命令把「任务开始查库、中途遇到新问题再查、学到就自主入库（无需确认）、密钥不入库」写进 `CLAUDE.md` / `AGENTS.md` / `.trae/rules/` / `.cursor/rules/`。
 
 Onboarding a **new** agent later needs no instructions from you: just tell it
 "read `AGENTS.md`" — the file routes first-timers to `ONBOARDING.md`, where they
@@ -177,8 +177,8 @@ agentbrain rules --agent claude --write   # claude / codex / trae / cursor
 
 It installs a short "agentbrain memory discipline" section into `CLAUDE.md`,
 `AGENTS.md`, `.trae/rules/` or `.cursor/rules/`: query at task start, re-query
-on new subtasks/errors, ingest at wrap-up with user confirmation, no secrets
-ever.
+on new subtasks/errors, ingest autonomously when something is learned, no
+secrets ever.
 
 ## MCP tools
 
@@ -226,21 +226,28 @@ executes them via `agentbrain apply`.
 
 ## Changelog
 
-- **0.4.4** — Robustness + usability round. New `agentbrain verify <id>` marks
-  a lesson as re-verified today — the remedy for the STALE finding lint reports
-  (previously hand-editing was the only option). `memory_ingest` now warns when
-  a near-duplicate active lesson exists (summary Jaccard ≥ 0.6), so repeated
-  ingests surface immediately instead of waiting for the weekly lint. Redaction
-  false positives fixed: 40-char git SHA-1 digests and Bearer-shaped English
-  prose no longer trip the AWS-secret/Bearer patterns (real secrets still do).
-  Lesson files saved with a UTF-8 BOM by Windows editors (Notepad) are now
-  read correctly instead of silently vanishing from the index; the same
-  BOM tolerance applies to profiles, logs, proposals and MCP resources.
+- **0.4.4** — Autonomy + robustness round. Agents now ingest lessons
+  autonomously and recall them without being told: MCP tool descriptions
+  (always in the client's context once the server is registered) directly
+  instruct when to query — task start, new subtask/error mid-task, before
+  debugging — and to ingest the moment something is learned, with no user
+  approval needed; the installed rule block and `AGENTS.md` say the same, and
+  an empty `memory_query` result now suggests retrying with broader keywords
+  or the other language before concluding nothing is stored. New
+  `agentbrain verify <id>` marks a lesson as re-verified today — the remedy
+  for the STALE finding lint reports. `memory_ingest` warns when a
+  near-duplicate active lesson exists (summary Jaccard ≥ 0.6), so repeated
+  ingests surface immediately instead of waiting for the weekly lint.
+  Redaction false positives fixed: 40-char git SHA-1 digests and Bearer-shaped
+  English prose no longer trip the AWS-secret/Bearer patterns (real secrets
+  still do). Lesson files saved with a UTF-8 BOM by Windows editors (Notepad)
+  are now read correctly instead of silently vanishing from the index; the
+  same BOM tolerance applies to profiles, logs, proposals and MCP resources.
   Long case ids are truncated (48 chars) instead of crashing with a
   path-too-long error; `verified: 'false'` in quoted frontmatter parses as
   false; lint now also scans tags and case ids for secrets (same scope as
   ingest); rule-file writes and git snapshot output decoding are hardened.
-  107 tests.
+  111 tests.
 - **0.4.3** — New `agentbrain rules` command: registers MCP and the tools become
   *available*, but clients only call them if a rule tells them to. One command
   now installs the memory discipline (query at task start, re-query on new

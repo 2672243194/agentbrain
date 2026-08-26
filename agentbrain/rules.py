@@ -18,11 +18,14 @@ RULE_BLOCK = """## agentbrain memory discipline
 
 - At task start: call `memory_query` (top_k=5) with the task topic; read the
   hits (paths are listed) before starting work.
-- Mid-task: on a new subtask, an error, or a topic switch the initial query did
-  not cover, re-query with fresh keywords. Plain continuation of the same topic
-  needs no re-query.
-- At wrap-up: with user confirmation, `memory_ingest` each distinct reusable
-  lesson (facts + applicable scenario + fix, one file each).
+- Mid-task: call `memory_query` again whenever a new subtask, an error or an
+  unfamiliar topic appears — a stored lesson may already hold the fix. Plain
+  continuation of the same topic needs no re-query. No match? Retry once with
+  broader keywords or the other language before concluding nothing is stored.
+- When the task teaches something reusable (pitfall, working approach,
+  corrected assumption), call `memory_ingest` yourself, immediately — no user
+  approval needed. One lesson = one file: facts + applicable scenario + fix,
+  <= 30 lines, no storytelling. Sessions end abruptly; waiting loses lessons.
 - Never write secrets, tokens or passwords into the vault (ingest blocks
   credential-shaped input; reference secrets as `${ENV:VAR_NAME}`).
 """
