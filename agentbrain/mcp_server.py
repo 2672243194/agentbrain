@@ -66,8 +66,10 @@ def memory_profile() -> str:
 
 
 def memory_suggest(title: str, change: str) -> str:
-    """Propose a change to the owner profile (e.g. a preference you observed).
-    Writes to Agent-Profile/_suggestions/ for the owner to review — the profile
+    """The only agent-writable path toward hard rules (Immutable) and soft
+    preferences (Mutable-Hints). Propose a change you observed — e.g. "worth
+    promoting to a hard rule" — with a one-line rule wording. The proposal
+    lands in Agent-Profile/_suggestions/ for the owner to review; the profile
     itself is never modified by agents."""
     return api.memory_suggest(title=title, change=change)
 
@@ -111,7 +113,7 @@ def _profile_resource() -> str:
     v = _open()
     if v is None:
         return "Vault not initialized. Run: agentbrain init"
-    return Profile(v).read() or "Profile is empty."
+    return Profile(v).read() or "Profile is empty; agents never edit it — propose via memory_suggest."
 
 
 def main() -> None:

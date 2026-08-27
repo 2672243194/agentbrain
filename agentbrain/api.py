@@ -331,7 +331,8 @@ def memory_profile(vault: Vault | None = None) -> str:
         return (
             "Profile is empty. The owner can add Markdown files under "
             "Agent-Profile/Immutable/ (hard rules) and Agent-Profile/Mutable-Hints/ "
-            "(soft preferences); agents read them via memory_profile."
+            "(soft preferences); agents read them via memory_profile and propose "
+            "changes via memory_suggest (_suggestions/ → owner review)."
         )
     return text
 

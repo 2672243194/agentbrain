@@ -12,11 +12,25 @@ def test_read_merges_layers_and_skips_readme(vault: Vault):
     assert "[hints] hints" in text
     assert "prefers bullet lists" in text
     assert "README" not in text
+    assert "memory_suggest" in text
+    assert "_suggestions/" in text
 
 
 def test_read_empty_when_no_profile_files(vault: Vault):
     (vault.root / "Agent-Profile" / "Immutable" / "profile.md").unlink()
     assert Profile(vault).read() == ""
+
+
+def test_api_memory_profile_empty_hint(vault: Vault):
+    (vault.root / "Agent-Profile" / "Immutable" / "profile.md").unlink()
+    assert "Profile is empty" in api.memory_profile(vault=vault)
+
+
+def test_memory_profile_empty_points_to_suggest_channel(vault: Vault):
+    (vault.root / "Agent-Profile" / "Immutable" / "profile.md").unlink()
+    out = api.memory_profile(vault=vault)
+    assert "Profile is empty" in out
+    assert "memory_suggest" in out
 
 
 def test_suggest_writes_pending_file(vault: Vault):

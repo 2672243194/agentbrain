@@ -40,6 +40,13 @@ class Profile:
         for label, directory in (("immutable", self.immutable_dir), ("hints", self.hints_dir)):
             for stem, text in self._collect(directory):
                 sections.append(f"## [{label}] {stem}\n\n{text}")
+        if not sections:
+            return ""
+        sections.append(
+            "_This profile is read-only for agents. To change a rule or "
+            "preference here, call memory_suggest — proposals land in "
+            "Agent-Profile/_suggestions/ and the owner applies or rejects them._"
+        )
         return "\n\n".join(sections)
 
     def suggest(self, title: str, change: str) -> Path:
