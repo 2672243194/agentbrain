@@ -1,3 +1,3 @@
 """agentbrain — local-first long-term memory for AI agents."""
 
-__version__ = "0.4.4"
+__version__ = "0.4.5"

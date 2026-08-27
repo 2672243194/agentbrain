@@ -252,6 +252,19 @@ executes them via `agentbrain apply`.
 
 ## Changelog
 
+- **0.4.5** — Signposting + standards round. Agents looking at the owner
+  profile no longer miss the write channel: `memory_profile` output and the
+  `agentbrain://profile` resource end with a note that the profile is
+  read-only for agents and changes go through `memory_suggest`
+  (`_suggestions/`, owner review), and the `memory_suggest` tool description
+  states it is the only agent-writable path toward hard rules — closing the
+  gap where an agent concluded "no interface exists" while the tool sat in
+  its context. New `rules --agent agentsmd` target writes the agents.md
+  open-standard file, so OpenCode, Gemini CLI, Amp and other
+  standard-compliant clients get the discipline block with one command
+  instead of per-client wiring. README MCP examples now use the portable
+  default (`~/agentbrain`) and note that `AGENTBRAIN_VAULT` is optional.
+  131 tests (+4).
 - **0.4.4** — Autonomy + upgrade path + robustness round. Agents now ingest
   lessons autonomously and recall them without being told: MCP tool
   descriptions (always in the client's context once the server is registered)
