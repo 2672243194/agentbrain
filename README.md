@@ -86,6 +86,7 @@ agentbrain verify my-case-lesson-01    # 重新确认某条经验仍然有效（
 agentbrain distill                     # 分析 log 中重复出现的模式 → 生成提升提案
 agentbrain snapshot -m "手动备份"      # 手动提交快照（如用 Obsidian 手改文件后）
 agentbrain rules --agent trae --write  # 把记忆纪律写进客户端规则文件（项目根目录运行）
+agentbrain rules --agent agentsmd --write  # agents.md 开放标准，覆盖 OpenCode/Gemini CLI 等
 agentbrain rules --agent claude --write --global  # 写进用户级全局规则，所有项目生效
 ```
 
@@ -135,7 +136,8 @@ Vault 路径解析顺序：`--vault` 参数 > `AGENTBRAIN_VAULT` 环境变量 > 
 注册 MCP 只让 agent **能**调记忆工具；要让它**每次会话主动**查库，再把纪律写进客户端的规则文件（在项目根目录运行，幂等可重复）：
 
 ```bash
-agentbrain rules --agent claude --write   # 支持 claude / codex / trae / cursor（项目级）
+agentbrain rules --agent claude --write   # 支持 claude / codex / trae / cursor / agentsmd（项目级）
+agentbrain rules --agent agentsmd --write  # agents.md 开放标准：OpenCode、Gemini CLI、Amp 等都遵守
 agentbrain rules --agent claude --write --global  # 用户级全局（~/.claude/CLAUDE.md），一次配置所有项目生效
 ```
 
@@ -190,14 +192,16 @@ at task start takes one more line — write the discipline block into the
 project's rule file (run in the project root, idempotent):
 
 ```bash
-agentbrain rules --agent claude --write   # claude / codex / trae / cursor (per-project)
+agentbrain rules --agent claude --write   # claude / codex / trae / cursor / agentsmd (per-project)
 agentbrain rules --agent claude --write --global  # user-level (~/.claude/CLAUDE.md), all projects
 ```
 
 It installs a short "agentbrain memory discipline" section into `CLAUDE.md`,
 `AGENTS.md`, `.trae/rules/` or `.cursor/rules/`: query at task start, re-query
 on new subtasks/errors, ingest autonomously when something is learned, no
-secrets ever. TRAE and Cursor keep their global rules in their settings UIs;
+secrets ever. The `agentsmd` target writes the agents.md open standard file,
+followed by OpenCode, Gemini CLI, Amp and other standard-compliant tools.
+TRAE and Cursor keep their global rules in their settings UIs;
 claude and codex support `--global`.
 
 ## MCP tools

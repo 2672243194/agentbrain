@@ -68,6 +68,9 @@ TARGETS: dict[str, Target] = {
     "codex": Target("codex", "AGENTS.md", home_relpath=".codex/AGENTS.md"),
     "trae": Target("trae", ".trae/rules/project_rules.md"),
     "cursor": Target("cursor", ".cursor/rules/agentbrain.mdc", block=MDC_BLOCK),
+    # agents.md open standard (https://agents.md) — adopted by OpenCode,
+    # Gemini CLI, Amp, Codex and others; one file serves all of them.
+    "agentsmd": Target("agentsmd", "AGENTS.md"),
 }
 
 GENERIC = Target("generic", "")

@@ -62,7 +62,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--agent",
         default="generic",
-        help="claude | codex | trae | cursor | generic (default: generic, prints to stdout)",
+        help="claude | codex | trae | cursor | agentsmd | generic (default: generic, prints to stdout)",
     )
     p.add_argument(
         "--write",

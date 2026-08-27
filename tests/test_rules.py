@@ -63,6 +63,29 @@ def test_write_claude_appends_to_existing_file(tmp_path: Path):
     assert again.count(rules.MARKER) == 1
 
 
+def test_write_agentsmd_standard_target(tmp_path: Path):
+    out = rules.write("agentsmd", tmp_path)
+    path = tmp_path / "AGENTS.md"
+    assert path.is_file()
+    assert rules.MARKER in path.read_text(encoding="utf-8")
+    assert "Wrote" in out
+
+
+def test_write_agentsmd_appends_to_existing_file(tmp_path: Path):
+    path = tmp_path / "AGENTS.md"
+    path.write_text("# Repo instructions\n\nRun tests.\n", encoding="utf-8")
+    rules.write("agentsmd", tmp_path)
+    merged = path.read_text(encoding="utf-8")
+    assert merged.startswith("# Repo instructions")
+    assert "Run tests." in merged
+    assert rules.MARKER in merged
+
+
+def test_write_agentsmd_has_no_global_mode(tmp_path: Path):
+    out = rules.write("agentsmd", tmp_path, global_=True)
+    assert "no file-based global rules" in out
+
+
 def test_write_unknown_agent_reports_known_names(tmp_path: Path):
     out = rules.write("vscode", tmp_path)
     assert "Unknown agent" in out
