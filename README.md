@@ -17,13 +17,13 @@ agentbrain doctor             # 自检：一切正常会显示 "Everything looks
     "agentbrain": {
       "command": "agentbrain",
       "args": ["serve"],
-      "env": { "AGENTBRAIN_VAULT": "D:\\agentbrain" }
+      "env": { "AGENTBRAIN_VAULT": "~/agentbrain" }
     }
   }
 }
 ```
 
-把上面 JSON（vault 路径换成你的）粘进任意 MCP 客户端（Claude Code / Codex / Cursor / DSH / Open WebUI…），重启客户端，完成。Agent 从此有了跨会话、跨工具的长期记忆。
+`AGENTBRAIN_VAULT` 可省略（默认 `~/agentbrain`）；vault 在别处时才需要写，路径按你的实际情况改。把上面 JSON 粘进任意 MCP 客户端（Claude Code / Codex / Cursor / DSH / Open WebUI…），重启客户端，完成。Agent 从此有了跨会话、跨工具的长期记忆。
 
 以后接入**新的** agent 不用你教：对它说一句「读 `AGENTS.md` 照做」即可——文件开头会把新来者引导到 `ONBOARDING.md`，它自己就能判断接入状态（已接 MCP / 只有 shell / 只能读文件）并完成配置或降级。
 
@@ -125,11 +125,13 @@ claude mcp add agentbrain -- agentbrain serve
     "agentbrain": {
       "command": "agentbrain",
       "args": ["serve"],
-      "env": { "AGENTBRAIN_VAULT": "D:\\agentbrain" }
+      "env": { "AGENTBRAIN_VAULT": "~/agentbrain" }
     }
   }
 }
 ```
+
+`AGENTBRAIN_VAULT` 可省略（默认 `~/agentbrain`）；vault 在别处时才需要写。
 
 Vault 路径解析顺序：`--vault` 参数 > `AGENTBRAIN_VAULT` 环境变量 > `~/agentbrain`。
 
