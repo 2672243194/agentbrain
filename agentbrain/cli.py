@@ -126,8 +126,9 @@ def main(argv: list[str] | None = None) -> int:
         except VaultNotInitialized:
             print(doctor())
             return 2
-        print(doctor(v))
-        return 0
+        out = doctor(v)
+        print(out)
+        return 1 if "issue(s) found" in out else 0
     if args.cmd == "upgrade":
         cfg = Config.load(args.vault)
         print(scaffold.upgrade(Path(cfg.vault_dir)))
@@ -180,7 +181,11 @@ def main(argv: list[str] | None = None) -> int:
         tags = [t.strip() for t in args.tags.split(",") if t.strip()]
         print(api.memory_ingest(case_id=args.case, lesson=args.lesson, tags=tags, confidence=args.confidence, source_summary=args.summary, vault=vault))
     elif args.cmd == "lint":
-        print(api.memory_lint(scope=args.scope, vault=vault))
+        out = api.memory_lint(scope=args.scope, vault=vault)
+        print(out)
+        if out.startswith("Invalid scope"):
+            return 2
+        return 0 if out.startswith(("Lint clean", "No lessons in scope")) else 1
     elif args.cmd == "distill":
         print(api.memory_distill(window_days=args.window_days, min_repeat=args.min_repeat, vault=vault))
     elif args.cmd == "index":
