@@ -210,7 +210,7 @@ claude and codex support `--global`.
 
 | Tool | Purpose |
 |------|---------|
-| `memory_query(query, top_k=5, mode="index")` | Search lessons. `mode='index'` returns compact hits (id, summary, tags, path, gist); `mode='full'` adds full text. |
+| `memory_query(query, top_k=5, mode="index", tag=None)` | Search lessons. `mode='index'` returns compact hits (id, summary, tags, path, gist); `mode='full'` adds full text; `tag` narrows results to one tag. |
 | `memory_ingest(case_id, lesson, tags, confidence=0.8, source_summary=None)` | Save a new lesson (facts + scenario + fix, ≤ 30 lines). Creates a file, updates Index.md and log.md. |
 | `memory_lint(scope="all")` | Health check: duplicates, stale, expired, untagged, low-confidence. Writes a merge proposal to `_consolidations/`. |
 | `memory_distill(window_days=30, min_repeat=3)` | Finds cases/tags ingested ≥ N times in the window and writes a promotion proposal. |
@@ -252,6 +252,34 @@ executes them via `agentbrain apply`.
 
 ## Changelog
 
+- **0.4.6** — Robustness + scriptability round. Hand-written summaries are now
+  normalized to one line and capped at ingest, and both the Index.md table and
+  query output render them one-lined, so a multiline summary can no longer
+  break the index. lint stops flagging retired lessons: ORPHAN/EXPIRED/
+  LOWCONF skip superseded entries (SECRET/DANGLING still apply), ending
+  recurring proposals that could never be acted on. The redaction scanner
+  exempts lesson-id-shaped words (`…-lesson-01`, vault file names) so citing
+  `pypi-…-lesson-01` no longer trips the PyPI-token pattern. `agentbrain
+  snapshot` distinguishes committed / clean / failed instead of reporting
+  every git failure as "nothing to commit". `lint` and `doctor` gained
+  scripted exit codes (0 clean/healthy, 1 findings/issues, 2 bad scope /
+  uninitialized vault). CLI output reconfigures to UTF-8 when piped, so
+  emoji inside lesson text no longer crash redirects on Chinese-locale
+  Windows. Query results are more token-frugal: three lines per hit (tags
+  and path merged) and top_k clamped to 1–20; a new `tag` filter
+  (`memory_query(tag=…)` / `agentbrain query --tag …`) narrows search to one
+  tag. Index.md dropped its `used` column, so use-count bumps no longer
+  rewrite the whole index. `agentbrain doctor` now reports broken lesson
+  files (frontmatter present but unparseable) instead of letting them vanish
+  silently, and lesson-id lookups reject path separators. `python -m
+  agentbrain serve` works as a PATH-free MCP fallback (the doctor snippet
+  shows both forms), lint findings carry explicit remedies, empty queries and
+  unknown lint scopes are rejected with clear messages, tags past 8 are
+  reported as dropped, oversize lessons (> 4000 chars) get a split hint, and
+  nested locks across two vaults in one thread no longer deadlock.
+  `agentbrain.__version__` is now the single version source (pyproject reads
+  it dynamically), and a GitHub Actions matrix (ubuntu/windows × 3.10–3.12)
+  runs the suite. 165 tests (+34).
 - **0.4.5** — Signposting + standards round. Agents looking at the owner
   profile no longer miss the write channel: `memory_profile` output and the
   `agentbrain://profile` resource end with a note that the profile is
