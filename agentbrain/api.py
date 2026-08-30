@@ -195,7 +195,9 @@ def memory_lint(scope: str = "all", vault: Vault | None = None) -> str:
     for i, (a, sa, ta, ca) in enumerate(pre):
         for b, sb, tb, cb in pre[i + 1 :]:
             if _similar_pre(sa, ta, ca, sb, tb, cb):
-                findings.append(f"DUPLICATE {a.lesson_id} ≈ {b.lesson_id}")
+                findings.append(
+                    f"DUPLICATE {a.lesson_id} ≈ {b.lesson_id} — merge proposal below"
+                )
                 keeper, gone = (
                     (a, b) if a.use_count >= b.use_count else (b, a)
                 )  # keep the more-used lesson; the merge direction follows usage
@@ -212,16 +214,28 @@ def memory_lint(scope: str = "all", vault: Vault | None = None) -> str:
     for l in lessons:
         d = _days_since(l.last_verified_at or l.created_at)
         if d is not None and d > 90 and not l.superseded_by:
-            findings.append(f"STALE {l.lesson_id} (last verified {d} days ago)")
+            findings.append(
+                f"STALE {l.lesson_id} (last verified {d} days ago) — "
+                f"remedy: agentbrain verify {l.lesson_id}"
+            )
         exp = _days_since(l.valid_until)
         if l.valid_until and exp is not None and exp >= 0:
-            findings.append(f"EXPIRED {l.lesson_id} (valid_until {l.valid_until})")
+            findings.append(
+                f"EXPIRED {l.lesson_id} (valid_until {l.valid_until}) — "
+                "remedy: update valid_until by hand or supersede the lesson"
+            )
         if not l.tags:
-            findings.append(f"ORPHAN {l.lesson_id} (no tags)")
+            findings.append(f"ORPHAN {l.lesson_id} (no tags) — remedy: add tags in the lesson file")
         if l.confidence < 0.5:
-            findings.append(f"LOWCONF {l.lesson_id} (confidence {l.confidence})")
+            findings.append(
+                f"LOWCONF {l.lesson_id} (confidence {l.confidence}) — "
+                "remedy: adjust confidence by hand"
+            )
         if l.superseded_by and l.superseded_by not in all_ids:
-            findings.append(f"DANGLING {l.lesson_id} → missing {l.superseded_by}")
+            findings.append(
+                f"DANGLING {l.lesson_id} → missing {l.superseded_by} — "
+                "remedy: fix superseded_by by hand"
+            )
         for kind, _ in scan_secrets(
             "\n".join([l.content, l.source_summary, " ".join(l.tags), l.case_id])
         ):

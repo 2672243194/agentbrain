@@ -26,6 +26,8 @@ def _mcp_hint(vault_root: str) -> list[str]:
         "  }",
         "}",
         "```",
+        "If the client cannot resolve 'agentbrain' from PATH, use:",
+'  "command": "python", "args": ["-m", "agentbrain", "serve"]',
     ]
 
 
