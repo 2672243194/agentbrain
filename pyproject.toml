@@ -33,7 +33,7 @@ Issues = "https://github.com/2672243194/agentbrain/issues"
 Changelog = "https://github.com/2672243194/agentbrain/releases"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "setuptools>=68"]
 
 [project.scripts]
 agentbrain = "agentbrain.cli:main"
