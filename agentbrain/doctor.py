@@ -51,6 +51,15 @@ def doctor(vault: Vault | None = None) -> str:
     superseded = len(lessons) - len(active)
     lines.append(f"lessons: {len(active)} active" + (f" · {superseded} superseded" if superseded else ""))
 
+    broken = vault.broken_lessons()
+    if broken:
+        names = ", ".join(p.name for p in broken[:3])
+        problems.append(
+            f"{len(broken)} broken lesson file(s) ({names}) — fix the frontmatter by "
+            "hand or move the file out of Learnings/"
+        )
+        lines.append(f"learnings: {len(broken)} broken file(s) — {names}")
+
     index_text = (
         vault.index_md.read_text(encoding="utf-8-sig") if vault.index_md.is_file() else ""
     )

@@ -182,6 +182,11 @@ def memory_ingest(
         )
     if dropped_tags:
         out += f"\nnote: tags capped at 8 — dropped: {', '.join(dropped_tags)}"
+    if len(lesson) > 4000:
+        out += (
+            f"\nnote: lesson is {len(lesson)} chars — consider splitting it into "
+            "focused lessons so retrieval stays precise"
+        )
     return out
 
 

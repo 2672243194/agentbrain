@@ -135,7 +135,27 @@ class Vault:
             path=path,
         )
 
+    def broken_lessons(self) -> list[Path]:
+        """Learnings/*.md files that carry a frontmatter block but do not parse
+        into a lesson — likely hand-mangled metadata. Plain notes without
+        frontmatter are not lessons and are not reported."""
+        out: list[Path] = []
+        if not self.learnings_dir.is_dir():
+            return out
+        for p in sorted(self.learnings_dir.glob("*.md")):
+            try:
+                text = p.read_text(encoding="utf-8-sig")
+            except OSError:
+                out.append(p)
+                continue
+            if text.startswith("---") and self.load_lesson(p) is None:
+                out.append(p)
+        return out
+
     def get(self, lesson_id: str) -> Lesson | None:
+        # lesson_id becomes a file name component — reject path separators
+        if not lesson_id or "/" in lesson_id or "\\" in lesson_id or ".." in lesson_id:
+            return None
         p = self.learnings_dir / f"{lesson_id}.md"
         return self.load_lesson(p) if p.is_file() else None
 
