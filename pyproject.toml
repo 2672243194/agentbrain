@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mnemosyne-lite"
-version = "0.4.5"
+dynamic = ["version"]
 description = "Local-first long-term memory for AI agents: a plain Markdown vault plus a thin MCP server. Token-efficient, plug-and-play."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -37,6 +37,9 @@ dev = ["pytest>=8.0"]
 
 [project.scripts]
 agentbrain = "agentbrain.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "agentbrain.__version__"}
 
 [tool.setuptools.packages.find]
 include = ["agentbrain*"]
