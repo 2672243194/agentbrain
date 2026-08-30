@@ -50,13 +50,21 @@ class Snapshot:
         self._git("config", "user.email", "agentbrain@localhost")
         return True
 
-    def commit(self, message: str) -> bool:
-        """Commit all vault changes. True if a new commit was created."""
+    def commit(self, message: str) -> str:
+        """Commit all vault changes: 'committed', 'clean', or 'failed: <reason>'."""
         if not self.enabled:
-            return False
+            return "failed: snapshots disabled (no .git in vault)"
         self._git("add", "-A")
         r = self._git("commit", "-m", message)
-        return r is not None and r.returncode == 0
+        if r is None:
+            return "failed: git unavailable"
+        if r.returncode == 0:
+            return "committed"
+        out = f"{r.stdout or ''}\n{r.stderr or ''}"
+        if "nothing to commit" in out.lower():
+            return "clean"
+        reason = [ln for ln in (r.stderr or r.stdout or "").splitlines() if ln.strip()]
+        return f"failed: {reason[-1] if reason else 'unknown git error'}"
 
     def status(self) -> dict:
         """Best-effort info for `agentbrain doctor` (read-only)."""

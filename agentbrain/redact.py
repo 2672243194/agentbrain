@@ -30,6 +30,7 @@ _PLACEHOLDERS = [
     re.compile(r"\$\{ENV:[A-Z0-9_]+\}"),
     re.compile(r"\$\{env:[A-Za-z0-9_]+\}"),
     re.compile(r"\b(?:sk-xxx+|your[_-]?(?:api[_-]?)?key|xxx+|placeholder|changeme|redacted|<[^>]+>)\b", re.IGNORECASE),
+    re.compile(r"\b[A-Za-z0-9][A-Za-z0-9-]*-lesson-\d{1,4}\b"),
 ]
 
 _WHITELIST_HINT = (

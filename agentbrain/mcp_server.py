@@ -13,14 +13,16 @@ from .vault import Vault, VaultNotInitialized
 mcp = _Server("agentbrain")
 
 
-def memory_query(query: str, top_k: int = 5, mode: str = "index") -> str:
+def memory_query(
+    query: str, top_k: int = 5, mode: str = "index", tag: str | None = None
+) -> str:
     """Search long-term memory for lessons from earlier tasks. Call at task
-    start with the task topic, again whenever a new subtask, an error or an
-    unfamiliar topic appears mid-task, and before debugging anything — a prior
-    lesson may already hold the answer. mode='index' (default) returns compact
-    hits: id, summary, tags, path, gist; mode='full' adds the full text.
-    No match? Retry once with broader keywords or the other language."""
-    return api.memory_query(query=query, top_k=top_k, mode=mode)
+    start with the task topic, again on any new subtask, error or unfamiliar
+    topic, and before debugging anything — a prior lesson may already hold the
+    answer. mode='index' (default): compact hits (id, summary, tags, path,
+    gist); mode='full': full text. Optional tag=<tag> filters by tag. No
+    match? Retry once with broader keywords or the other language."""
+    return api.memory_query(query=query, top_k=top_k, mode=mode, tag=tag)
 
 
 def memory_ingest(
@@ -32,10 +34,10 @@ def memory_ingest(
 ) -> str:
     """Save a reusable lesson to long-term memory. Call autonomously the moment
     the task teaches something worth keeping (pitfall, working approach,
-    corrected assumption) — do not wait for user approval or session end:
-    facts + applicable scenario + fix, <= 30 lines, no storytelling. Creates a
-    new file only — never edits existing lessons; near-duplicates are flagged;
-    credential-shaped content is refused automatically."""
+    corrected assumption) — do not wait for user approval or session end.
+    Format: facts + applicable scenario + fix, <= 30 lines, no storytelling.
+    Creates a new file only — never edits existing lessons; near-duplicates are
+    flagged; credential-shaped content is refused automatically."""
     return api.memory_ingest(
         case_id=case_id,
         lesson=lesson,
@@ -60,17 +62,16 @@ def memory_distill(window_days: int = 30, min_repeat: int = 3) -> str:
 
 def memory_profile() -> str:
     """Return the owner profile: hard rules (Agent-Profile/Immutable) and soft
-    preferences (Agent-Profile/Mutable-Hints). Read-only. Call once per session
-    and tailor tone, language and formatting accordingly."""
+    preferences (Agent-Profile/Mutable-Hints). Read-only. Call once per
+    session; tailor tone, language and formatting accordingly."""
     return api.memory_profile()
 
 
 def memory_suggest(title: str, change: str) -> str:
     """The only agent-writable path toward hard rules (Immutable) and soft
-    preferences (Mutable-Hints). Propose a change you observed — e.g. "worth
-    promoting to a hard rule" — with a one-line rule wording. The proposal
-    lands in Agent-Profile/_suggestions/ for the owner to review; the profile
-    itself is never modified by agents."""
+    preferences (Mutable-Hints). Propose a change you observed with a one-line
+    rule wording; it lands in Agent-Profile/_suggestions/ for the owner to
+    review. The profile itself is never modified by agents."""
     return api.memory_suggest(title=title, change=change)
 
 

@@ -9,10 +9,11 @@ from .config import Config
 from .locking import atomic_write
 from .profile import Profile
 from .redact import redaction_hint, scan as scan_secrets
-from .retrieval import _days_since, search_lessons, tokenize
+from .retrieval import _days_since, oneline, search_lessons, tokenize
 from .vault import Vault, VaultNotInitialized
 
 _SUMMARY_CHARS = 160
+_TOP_K_MAX = 20
 _UNSAFE_CASE = re.compile(r'[\\/:*?"<>|\s]+')
 _CASE_ID_MAX = 48  # keeps lesson filenames within Windows path limits on long case ids
 
@@ -21,27 +22,28 @@ def _open_vault(vault: Vault | None) -> Vault:
     return vault if vault is not None else Vault.open(Config.load())
 
 
-def _oneline(text: str, n: int) -> str:
-    s = " ".join((text or "").split())
-    return s[: n - 1] + "…" if len(s) > n else s
-
-
 def _clean_case_id(case_id: str) -> str:
     cid = _UNSAFE_CASE.sub("-", (case_id or "").strip())[:_CASE_ID_MAX]
     return cid or "misc"
 
 
-def _normalize_tags(tags) -> list[str]:
+def _normalize_tags(tags) -> tuple[list[str], list[str]]:
+    """Dedupe and cap tags; returns (kept, dropped_beyond_cap)."""
     if tags is None:
-        return []
+        return [], []
     if isinstance(tags, str):
         tags = tags.split(",")
     out: list[str] = []
+    dropped: list[str] = []
     for t in tags:
         t = str(t).strip().strip("#")
-        if t and t not in out:
+        if not t or t in out:
+            continue
+        if len(out) >= 8:
+            dropped.append(t)
+        else:
             out.append(t)
-    return out[:8]
+    return out, dropped
 
 
 def _stamp() -> str:
@@ -72,6 +74,7 @@ def memory_query(
     query: str,
     top_k: int = 5,
     mode: str = "index",
+    tag: str | None = None,
     vault: Vault | None = None,
 ) -> str:
     try:
@@ -81,9 +84,22 @@ def memory_query(
 
     if mode not in _QUERY_MODES:
         mode = "index"
-    ranked = search_lessons(v.lessons(), query)
-    hits = ranked[: max(1, top_k)]
+    if not (query or "").strip():
+        return "Refused: empty query — pass the task topic or the error keywords."
+    lessons = v.lessons()
+    tag_name = (tag or "").strip().lstrip("#")
+    if tag_name:
+        lessons = [l for l in lessons if tag_name in l.tags]
+    ranked = search_lessons(lessons, query)
+    hits = ranked[: max(1, min(_TOP_K_MAX, top_k))]
     if not hits:
+        if tag_name and not lessons:
+            return (
+                f"No lessons tagged '{tag_name}'. Retry without the tag filter, or "
+                "with broader keywords / the other language before concluding "
+                "nothing is stored. If this task produces a reusable lesson, call "
+                "memory_ingest when done."
+            )
         return (
             "No lessons matched — retry once with broader keywords or the other "
             "language (Chinese ↔ English) before concluding nothing is stored. "
@@ -93,12 +109,13 @@ def memory_query(
     lines = [f"{len(hits)} lesson(s) matched (mode={mode}):", ""]
     for rank, (l, _score) in enumerate(hits, 1):
         lines.append(
-            f"{rank}. [{l.lesson_id}] {l.source_summary} "
+            f"{rank}. [{l.lesson_id}] {oneline(l.source_summary, _SUMMARY_CHARS)} "
             f"(conf {l.confidence} · used {l.use_count} · {l.last_verified_at})"
         )
-        lines.append(f"   tags: {', '.join(l.tags) or '-'}")
-        lines.append(f"   path: {v.relpath(l.path)}")
-        lines.append(f"   gist: {_oneline(l.content, _SUMMARY_CHARS)}")
+        lines.append(
+            f"   tags: {', '.join(l.tags) or '-'} · path: {v.relpath(l.path)}"
+        )
+        lines.append(f"   gist: {oneline(l.content, _SUMMARY_CHARS)}")
         if mode == "full":
             lines.extend(["", l.content.strip(), ""])
     v.bump_use([l.lesson_id for l, _ in hits])
@@ -129,14 +146,19 @@ def memory_ingest(
     if hits:
         return redaction_hint(hits)
 
-    tags = _normalize_tags(tags)
+    tags, dropped_tags = _normalize_tags(tags)
     case_id = _clean_case_id(case_id)
     confidence = min(1.0, max(0.0, confidence))
+    summary = (
+        oneline(source_summary, 60)
+        if (source_summary or "").strip()
+        else oneline(lesson, 60)
+    )
     with v.locked():  # id allocation + write must be atomic: parallel ingests of
         # the same case would otherwise draw the same lesson_id and overwrite
         lesson_obj = v.new_lesson(
             case_id=case_id,
-            source_summary=(source_summary or "").strip() or _oneline(lesson, 60),
+            source_summary=summary,
             content=lesson.strip(),
             tags=tags,
             confidence=confidence,
@@ -158,6 +180,8 @@ def memory_ingest(
             f"\nnote: similar active lesson(s) exist — {', '.join(similar[:3])}"
             " (a merge proposal appears in the next lint run)"
         )
+    if dropped_tags:
+        out += f"\nnote: tags capped at 8 — dropped: {', '.join(dropped_tags)}"
     return out
 
 
@@ -175,6 +199,8 @@ def memory_lint(scope: str = "all", vault: Vault | None = None) -> str:
     except VaultNotInitialized as e:
         return str(e)
 
+    if scope != "all" and not scope.startswith("tag:"):
+        return "Invalid scope — use 'all' or 'tag:<tag>'."
     all_lessons = v.lessons(include_superseded=True)
     lessons = all_lessons
     if scope.startswith("tag:"):
@@ -212,21 +238,22 @@ def memory_lint(scope: str = "all", vault: Vault | None = None) -> str:
                 )
 
     for l in lessons:
+        retired = bool(l.superseded_by)
         d = _days_since(l.last_verified_at or l.created_at)
-        if d is not None and d > 90 and not l.superseded_by:
+        if d is not None and d > 90 and not retired:
             findings.append(
                 f"STALE {l.lesson_id} (last verified {d} days ago) — "
                 f"remedy: agentbrain verify {l.lesson_id}"
             )
         exp = _days_since(l.valid_until)
-        if l.valid_until and exp is not None and exp >= 0:
+        if l.valid_until and exp is not None and exp >= 0 and not retired:
             findings.append(
                 f"EXPIRED {l.lesson_id} (valid_until {l.valid_until}) — "
                 "remedy: update valid_until by hand or supersede the lesson"
             )
-        if not l.tags:
+        if not l.tags and not retired:
             findings.append(f"ORPHAN {l.lesson_id} (no tags) — remedy: add tags in the lesson file")
-        if l.confidence < 0.5:
+        if l.confidence < 0.5 and not retired:
             findings.append(
                 f"LOWCONF {l.lesson_id} (confidence {l.confidence}) — "
                 "remedy: adjust confidence by hand"

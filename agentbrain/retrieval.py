@@ -21,6 +21,12 @@ def tokenize(text: str) -> list[str]:
     return tokens
 
 
+def oneline(text: str, n: int) -> str:
+    """Collapse whitespace and truncate to n characters (ellipsis-terminated)."""
+    s = " ".join((text or "").split())
+    return s[: n - 1] + "…" if len(s) > n else s
+
+
 class BM25:
     def __init__(self, docs: list[list[str]], k1: float = 1.5, b: float = 0.75):
         self.k1, self.b = k1, b

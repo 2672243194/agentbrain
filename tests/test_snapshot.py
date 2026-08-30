@@ -64,7 +64,7 @@ def test_no_git_repo_graceful(tmp_path):
     memory_ingest(case_id="nogit", lesson="still works", tags=[], vault=v)
     assert v.get("nogit-lesson-01") is not None
     assert not Snapshot(root).enabled
-    assert Snapshot(root).commit("x") is False
+    assert Snapshot(root).commit("x").startswith("failed")
 
 
 def test_git_missing_graceful(vault: Vault, monkeypatch, tmp_path):
@@ -87,10 +87,10 @@ def test_snapshot_command_commits_pending(vault: Vault):
     )
     snap = Snapshot(vault.root)
     with vault.locked():
-        assert snap.commit("manual snapshot")
+        assert snap.commit("manual snapshot") == "committed"
     assert len(_log(vault.root)) == n_before + 1
     with vault.locked():  # second run: nothing new
-        assert not snap.commit("manual snapshot")
+        assert snap.commit("manual snapshot") == "clean"
 
 
 def test_apply_snapshots(vault: Vault):

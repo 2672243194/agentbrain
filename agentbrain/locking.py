@@ -56,19 +56,20 @@ def vault_lock(root: Path, timeout: float = 10.0) -> Iterator[None]:
 
     Uses an OS-level byte-range lock on a lock file, so a crashed holder
     releases instantly — no stale detection and no reclaim race. Re-entrant
-    within the same thread. The lock file persists on disk; removing it while
-    a holder might exist would break exclusion, so it is never unlinked.
+    within the same thread, including nested locks on different vaults. The
+    lock file persists on disk; removing it while a holder might exist would
+    break exclusion, so it is never unlinked.
     """
     lock = root / "Case-Learnings" / ".vault.lock"
     lock.parent.mkdir(parents=True, exist_ok=True)
     key = str(lock)
-    held = getattr(_local, "held", None)
-    if held is not None and held[0] == key:
-        held[1] += 1
+    held: dict[str, int] | None = getattr(_local, "held", None)
+    if held and key in held:
+        held[key] += 1
         try:
             yield
         finally:
-            held[1] -= 1
+            held[key] -= 1
         return
 
     fd = os.open(str(lock), os.O_CREAT | os.O_RDWR)
@@ -82,11 +83,14 @@ def vault_lock(root: Path, timeout: float = 10.0) -> Iterator[None]:
                     "automatically when that process exits."
                 )
             time.sleep(_RETRY_INTERVAL)
-        _local.held = [key, 1]
+        if held is None:
+            held = {}
+            _local.held = held
+        held[key] = 1
         try:
             yield
         finally:
-            _local.held = None
+            del held[key]
             _release(fd)
     finally:
         os.close(fd)

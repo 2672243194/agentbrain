@@ -145,7 +145,7 @@ def test_concurrent_ingest_no_lost_lessons(vault: Vault):
         assert f"case-{i}-lesson-01" in index
 
 
-def test_bump_use_single_rebuild(vault: Vault, monkeypatch):
+def test_bump_use_skips_index_rebuild(vault: Vault, monkeypatch):
     calls = {"n": 0}
     real = Vault._rebuild_index_locked
 
@@ -159,11 +159,9 @@ def test_bump_use_single_rebuild(vault: Vault, monkeypatch):
             case_id=f"c{i}", lesson=f"lesson {i}", tags=["t"], vault=vault
         )
 
-    memory_query("lesson", top_k=3, vault=vault)  # hits 3 → must rebuild once
-    assert calls["n"] >= 1
-    after_query = calls["n"]
+    assert calls["n"] == 3  # one rebuild per ingest
     memory_query("lesson", top_k=3, vault=vault)
-    assert calls["n"] - after_query == 1  # exactly one rebuild per query
+    assert calls["n"] == 3  # use-count bumps ride along without an index rebuild
 
 
 def test_stray_md_files_skipped(vault: Vault):

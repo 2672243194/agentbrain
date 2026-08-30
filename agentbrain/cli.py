@@ -26,6 +26,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("query")
     p.add_argument("-k", "--top-k", type=int, default=5)
     p.add_argument("--full", action="store_true", help="Print full lesson text for top hits")
+    p.add_argument("--tag", default=None, help="Only lessons carrying this tag")
 
     p = sub.add_parser("ingest", help="Save a new lesson")
     p.add_argument("--case", default="misc", help="Case id (default: misc)")
@@ -93,6 +94,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if argv is None:  # real invocation; in-process calls (tests) keep their streams
+        for stream in (sys.stdout, sys.stderr):
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(encoding="utf-8", errors="replace")
     args = _build_parser().parse_args(argv)
 
     if args.cmd == "init":
@@ -140,10 +145,14 @@ def main(argv: list[str] | None = None) -> int:
             print("Snapshots unavailable: git not found.", file=sys.stderr)
             return 2
         with v.locked():
-            if snap.commit(args.message):
+            status = snap.commit(args.message)
+            if status == "committed":
                 print(f"Snapshot committed: {args.message}")
-            else:
+            elif status == "clean":
                 print("Nothing to commit — vault unchanged.")
+            else:
+                print(status, file=sys.stderr)
+                return 2
         return 0
     if args.cmd == "serve":
         from . import mcp_server
@@ -158,7 +167,15 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.cmd == "query":
-        print(api.memory_query(query=args.query, top_k=args.top_k, mode="full" if args.full else "index", vault=vault))
+        print(
+            api.memory_query(
+                query=args.query,
+                top_k=args.top_k,
+                mode="full" if args.full else "index",
+                tag=args.tag,
+                vault=vault,
+            )
+        )
     elif args.cmd == "ingest":
         tags = [t.strip() for t in args.tags.split(",") if t.strip()]
         print(api.memory_ingest(case_id=args.case, lesson=args.lesson, tags=tags, confidence=args.confidence, source_summary=args.summary, vault=vault))
