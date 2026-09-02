@@ -8,13 +8,12 @@ dynamic = ["version"]
 description = "Local-first long-term memory for AI agents: a plain Markdown vault plus a thin MCP server. Token-efficient, plug-and-play."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [{ name = "agentbrain contributors" }]
 keywords = ["agent", "memory", "mcp", "llm", "claude-code", "codex", "opencode", "obsidian", "long-term-memory", "bm25"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",

@@ -263,6 +263,17 @@ executes them via `agentbrain apply`.
 
 ## Changelog
 
+- **0.5.0** — Retrieval utilization + Codex onboarding round. Compact
+  `memory_query` results no longer increment `use_count`; the new
+  `memory_read` tool records actual full-text reads, preventing weak tail
+  matches from reinforcing themselves in later ranking. New `memory_stats`
+  reports active, retired, read, unread and most-read lessons. New
+  `agentbrain install --agent codex --global` configures the MCP server,
+  installs the memory discipline, runs a vault health check and prints the
+  restart verification step. The shipped discipline now follows a two-stage
+  query-then-read flow, with safe upgrade support for the 0.4.6 template.
+  README Codex commands were corrected, and a mixed Chinese/English retrieval
+  quality gate now enforces Recall@5 and MRR@5. 172 tests (+7).
 - **0.4.6** — Robustness + scriptability round. Hand-written summaries are now
   normalized to one line and capped at ingest, and both the Index.md table and
   query output render them one-lined, so a multiline summary can no longer
