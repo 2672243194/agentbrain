@@ -25,6 +25,18 @@ def memory_query(
     return api.memory_query(query=query, top_k=top_k, mode=mode, tag=tag)
 
 
+def memory_read(lesson_ids: list[str]) -> str:
+    """Read selected lessons in full after memory_query identifies relevant
+    candidates. Reading records actual use; pass at most 10 lesson ids."""
+    return api.memory_read(lesson_ids=lesson_ids)
+
+
+def memory_stats() -> str:
+    """Return compact vault utilization statistics: active, retired, read,
+    unread, total reads and the most-read lessons."""
+    return api.memory_stats()
+
+
 def memory_ingest(
     case_id: str,
     lesson: str,
@@ -76,6 +88,8 @@ def memory_suggest(title: str, change: str) -> str:
 
 
 mcp.add_tool(memory_query)
+mcp.add_tool(memory_read)
+mcp.add_tool(memory_stats)
 mcp.add_tool(memory_ingest)
 mcp.add_tool(memory_lint)
 mcp.add_tool(memory_distill)

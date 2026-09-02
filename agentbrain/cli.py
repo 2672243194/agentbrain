@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -27,6 +29,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("-k", "--top-k", type=int, default=5)
     p.add_argument("--full", action="store_true", help="Print full lesson text for top hits")
     p.add_argument("--tag", default=None, help="Only lessons carrying this tag")
+
+    p = sub.add_parser("read", help="Read selected lessons in full and record actual use")
+    p.add_argument("ids", nargs="+", help="Lesson id(s), up to 10")
+
+    sub.add_parser("stats", help="Show vault utilization statistics")
 
     p = sub.add_parser("ingest", help="Save a new lesson")
     p.add_argument("--case", default="misc", help="Case id (default: misc)")
@@ -78,6 +85,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "(claude: ~/.claude/CLAUDE.md, codex: ~/.codex/AGENTS.md; applies to all projects)",
     )
 
+    p = sub.add_parser("install", help="Configure an MCP client and install memory discipline")
+    p.add_argument("--agent", required=True, choices=["codex"])
+    p.add_argument("--global", dest="global_", action="store_true")
+
     p = sub.add_parser("snapshot", help="Commit all vault changes (e.g. after hand-editing files)")
     p.add_argument("-m", "--message", default="manual snapshot", help="Commit message")
 
@@ -117,6 +128,59 @@ def main(argv: list[str] | None = None) -> int:
             print(rules_mod.write(args.agent, Path.cwd(), global_=args.global_))
         else:
             print(rules_mod.render(args.agent))
+        return 0
+    if args.cmd == "install":
+        from . import rules as rules_mod
+        from .doctor import doctor
+
+        try:
+            install_vault = Vault.open(Config.load(args.vault))
+        except VaultNotInitialized as e:
+            print(str(e), file=sys.stderr)
+            return 2
+        vault_dir = install_vault.root
+        codex = shutil.which("codex")
+        if codex is None:
+            print("Codex CLI not found on PATH.", file=sys.stderr)
+            return 2
+        existing = subprocess.run(
+            [codex, "mcp", "get", "agentbrain"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if existing.returncode == 0:
+            mcp_status = "AgentBrain MCP already configured; existing entry kept."
+        else:
+            added = subprocess.run(
+                [
+                    codex,
+                    "mcp",
+                    "add",
+                    "agentbrain",
+                    "--env",
+                    f"AGENTBRAIN_VAULT={vault_dir}",
+                    "--",
+                    sys.executable,
+                    "-m",
+                    "agentbrain",
+                    "serve",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            if added.returncode != 0:
+                print(added.stderr.strip() or added.stdout.strip(), file=sys.stderr)
+                return 2
+            mcp_status = "AgentBrain MCP configured."
+        rule_status = rules_mod.write("codex", Path.cwd(), global_=args.global_)
+        print(
+            f"{mcp_status}\n{rule_status}\n\n{doctor(install_vault)}\n\n"
+            "Restart Codex, then call memory_profile to verify."
+        )
         return 0
     if args.cmd == "doctor":
         from .doctor import doctor
@@ -177,6 +241,10 @@ def main(argv: list[str] | None = None) -> int:
                 vault=vault,
             )
         )
+    elif args.cmd == "read":
+        print(api.memory_read(lesson_ids=args.ids, vault=vault))
+    elif args.cmd == "stats":
+        print(api.memory_stats(vault=vault))
     elif args.cmd == "ingest":
         tags = [t.strip() for t in args.tags.split(",") if t.strip()]
         print(api.memory_ingest(case_id=args.case, lesson=args.lesson, tags=tags, confidence=args.confidence, source_summary=args.summary, vault=vault))

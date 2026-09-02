@@ -21,7 +21,11 @@ _UPDATABLE = ("AGENTS.md", "ONBOARDING.md")
 # Template versions shipped by earlier releases. A vault file matching one of
 # these is provably unmodified, so `upgrade` may replace it safely.
 _LEGACY = {
-    "AGENTS.md": ("legacy/AGENTS-0.4.1.md", "legacy/AGENTS-0.4.3.md"),
+    "AGENTS.md": (
+        "legacy/AGENTS-0.4.1.md",
+        "legacy/AGENTS-0.4.3.md",
+        "legacy/AGENTS-0.4.6.md",
+    ),
     "ONBOARDING.md": (),
 }
 

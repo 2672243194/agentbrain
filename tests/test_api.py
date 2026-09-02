@@ -19,7 +19,35 @@ def test_ingest_and_query_flow(vault):
     assert "case-001-lesson-01" in out
 
     lesson = vault.get("case-001-lesson-01")
-    assert lesson.use_count == 1
+    assert lesson.use_count == 0
+
+    out = api.memory_read(["case-001-lesson-01"], vault=vault)
+    assert "部署前必须先跑数据库迁移脚本" in out
+    assert vault.get("case-001-lesson-01").use_count == 1
+
+
+def test_full_query_records_reads(vault):
+    api.memory_ingest(case_id="full", lesson="full query content", vault=vault)
+    api.memory_query("query content", mode="full", vault=vault)
+    assert vault.get("full-lesson-01").use_count == 1
+
+
+def test_memory_read_handles_missing_and_deduplicates(vault):
+    api.memory_ingest(case_id="read", lesson="read selected content", vault=vault)
+    out = api.memory_read(["read-lesson-01", "read-lesson-01", "missing"], vault=vault)
+    assert out.count("## [read-lesson-01]") == 1
+    assert "Not found: missing" in out
+    assert vault.get("read-lesson-01").use_count == 1
+
+
+def test_memory_stats(vault):
+    api.memory_ingest(case_id="used", lesson="used content", vault=vault)
+    api.memory_ingest(case_id="unused", lesson="unused content", vault=vault)
+    api.memory_read("used-lesson-01", vault=vault)
+    out = api.memory_stats(vault=vault)
+    assert "active: 3" in out
+    assert "read at least once: 1 · never read: 2" in out
+    assert "total recorded reads: 1" in out
 
 
 def test_ingest_refuses_empty_lesson(vault):

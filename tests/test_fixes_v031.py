@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 
-from agentbrain.api import memory_ingest, memory_lint, memory_query
+from agentbrain.api import memory_ingest, memory_lint, memory_query, memory_read
 from agentbrain.vault import Vault
 
 
@@ -80,9 +80,11 @@ def test_lint_merge_direction_follows_use_count(vault: Vault):
     assert "supersede: d1-lesson-01 -> d2-lesson-01" not in text
 
 
-def test_query_bump_and_confidence_display(vault: Vault):
+def test_query_does_not_bump_until_read(vault: Vault):
     memory_ingest(case_id="qc", lesson="quantum cache lesson", tags=["q"], vault=vault)
     out = memory_query("quantum cache", vault=vault)
     assert "qc-lesson-01" in out
     lesson = vault.get("qc-lesson-01")
-    assert lesson.use_count == 1
+    assert lesson.use_count == 0
+    memory_read("qc-lesson-01", vault=vault)
+    assert vault.get("qc-lesson-01").use_count == 1

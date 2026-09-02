@@ -27,9 +27,7 @@ Codex, OpenCode, Cursor, ...). Read this file at session start. It is small on p
    lesson may already hold the fix; retry with broader keywords or the other
    language before concluding nothing is stored.
    If MCP tools are unavailable, read `Case-Learnings/Index.md` and grep `Learnings/`.
-3. **Before answering** — call `memory_read` for the top 1–3 relevant ids. This
-   records actual use; a compact query result alone does not count as use. In
-   file-only mode, open the corresponding lesson files instead.
+3. **Before answering** — open the top 1–3 candidate lesson files in full.
 4. **During the task** — NEVER edit or delete existing lessons. Create new ones only.
 5. **When you learn something reusable** — call `memory_ingest` immediately and
    autonomously, no owner confirmation needed (low-value lessons simply rank
@@ -68,3 +66,4 @@ Codex, OpenCode, Cursor, ...). Read this file at session start. It is small on p
   lesson or a `_consolidations/` proposal — never an in-place edit.
 - **Token discipline.** Keep `source_summary` ≤ 60 chars; the index is the first
   retrieval layer and is read often.
+

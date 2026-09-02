@@ -118,7 +118,81 @@ def memory_query(
         lines.append(f"   gist: {oneline(l.content, _SUMMARY_CHARS)}")
         if mode == "full":
             lines.extend(["", l.content.strip(), ""])
-    v.bump_use([l.lesson_id for l, _ in hits])
+    if mode == "full":
+        v.bump_use([l.lesson_id for l, _ in hits])
+    return "\n".join(lines)
+
+
+def memory_read(
+    lesson_ids: list[str] | str,
+    vault: Vault | None = None,
+) -> str:
+    """Read selected lessons in full and record actual use."""
+    try:
+        v = _open_vault(vault)
+    except VaultNotInitialized as e:
+        return str(e)
+
+    if isinstance(lesson_ids, str):
+        lesson_ids = [lesson_ids]
+    ids = list(dict.fromkeys(str(i).strip() for i in lesson_ids if str(i).strip()))[:10]
+    if not ids:
+        return "Refused: no lesson ids supplied."
+
+    found: list[Lesson] = []
+    missing: list[str] = []
+    for lesson_id in ids:
+        lesson = v.get(lesson_id)
+        if lesson is None:
+            missing.append(lesson_id)
+        else:
+            found.append(lesson)
+
+    if found:
+        v.bump_use([lesson.lesson_id for lesson in found])
+    lines: list[str] = []
+    for lesson in found:
+        lines.extend(
+            [
+                f"## [{lesson.lesson_id}] {lesson.source_summary}",
+                f"tags: {', '.join(lesson.tags) or '-'} · path: {v.relpath(lesson.path)}",
+                "",
+                lesson.content.strip(),
+                "",
+            ]
+        )
+    if missing:
+        lines.append(f"Not found: {', '.join(missing)}")
+    return "\n".join(lines).rstrip()
+
+
+def memory_stats(vault: Vault | None = None) -> str:
+    """Return compact vault utilization statistics."""
+    try:
+        v = _open_vault(vault)
+    except VaultNotInitialized as e:
+        return str(e)
+
+    all_lessons = v.lessons(include_superseded=True)
+    active = [lesson for lesson in all_lessons if not lesson.superseded_by]
+    retired = len(all_lessons) - len(active)
+    used = [lesson for lesson in active if lesson.use_count > 0]
+    total_reads = sum(lesson.use_count for lesson in active)
+    top = sorted(active, key=lambda lesson: (-lesson.use_count, lesson.lesson_id))[:5]
+    lines = [
+        "Vault utilization:",
+        f"- active: {len(active)} · retired: {retired}",
+        f"- read at least once: {len(used)} · never read: {len(active) - len(used)}",
+        f"- total recorded reads: {total_reads}",
+        "- most read:",
+    ]
+    lines.extend(
+        f"  - {lesson.lesson_id}: {lesson.use_count}"
+        for lesson in top
+        if lesson.use_count > 0
+    )
+    if not used:
+        lines.append("  - none")
     return "\n".join(lines)
 
 

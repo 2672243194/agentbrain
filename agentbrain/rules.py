@@ -16,8 +16,8 @@ MARKER = "agentbrain memory discipline"
 
 RULE_BLOCK = """## agentbrain memory discipline
 
-- At task start: call `memory_query` (top_k=5) with the task topic; read the
-  hits (paths are listed) before starting work.
+- At task start: call `memory_query` (top_k=5) with the task topic, then call
+  `memory_read` for the top 1-3 relevant ids before starting work.
 - Mid-task: call `memory_query` again whenever a new subtask, an error or an
   unfamiliar topic appears — a stored lesson may already hold the fix. Plain
   continuation of the same topic needs no re-query. No match? Retry once with
@@ -32,6 +32,21 @@ RULE_BLOCK = """## agentbrain memory discipline
 
 # Blocks shipped by earlier releases; `rules --write` replaces these in place.
 LEGACY_BLOCKS: list[str] = [
+    """## agentbrain memory discipline
+
+- At task start: call `memory_query` (top_k=5) with the task topic; read the
+  hits (paths are listed) before starting work.
+- Mid-task: call `memory_query` again whenever a new subtask, an error or an
+  unfamiliar topic appears — a stored lesson may already hold the fix. Plain
+  continuation of the same topic needs no re-query. No match? Retry once with
+  broader keywords or the other language before concluding nothing is stored.
+- When the task teaches something reusable (pitfall, working approach,
+  corrected assumption), call `memory_ingest` yourself, immediately — no user
+  approval needed. One lesson = one file: facts + applicable scenario + fix,
+  <= 30 lines, no storytelling. Sessions end abruptly; waiting loses lessons.
+- Never write secrets, tokens or passwords into the vault (ingest blocks
+  credential-shaped input; reference secrets as `${ENV:VAR_NAME}`).
+""",
     """## agentbrain memory discipline
 
 - At task start: call `memory_query` (top_k=5) with the task topic; read the

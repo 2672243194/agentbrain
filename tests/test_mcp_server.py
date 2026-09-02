@@ -8,6 +8,8 @@ def test_mcp_tools_registered():
     names = {t.name for t in tools}
     assert names == {
         "memory_query",
+        "memory_read",
+        "memory_stats",
         "memory_ingest",
         "memory_lint",
         "memory_distill",
@@ -41,6 +43,18 @@ def test_mcp_tool_call_end_to_end(tmp_path, monkeypatch):
         return await mcp_server.mcp.call_tool("memory_query", {"query": "MCP 超时"})
 
     assert "c-mcp-lesson-01" in _result_text(asyncio.run(call()))
+
+
+def test_mcp_read_and_stats(tmp_path, monkeypatch):
+    from agentbrain import mcp_server, scaffold
+
+    root = tmp_path / "vault"
+    scaffold.init(root)
+    monkeypatch.setenv("AGENTBRAIN_VAULT", str(root))
+    mcp_server.memory_ingest("usage", "Selected lesson", ["usage"])
+
+    assert "Selected lesson" in mcp_server.memory_read(["usage-lesson-01"])
+    assert "total recorded reads: 1" in mcp_server.memory_stats()
 
 
 def test_mcp_profile_and_suggest(tmp_path, monkeypatch):

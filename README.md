@@ -78,6 +78,8 @@ agentbrain init ~/agentbrain           # 生成 vault 脚手架（幂等），�
 agentbrain doctor                      # 体检：vault/索引/锁/快照/log 一览
 agentbrain ingest --case demo --lesson "部署前必须先跑迁移脚本" --tags 部署,运维
 agentbrain query "部署 迁移"
+agentbrain read demo-lesson-01         # 读取确认相关的记忆，并记录实际使用
+agentbrain stats                       # 查看利用率统计
 agentbrain profile                     # 查看个人偏好（Immutable + Mutable-Hints）
 agentbrain suggest --title "回复用中文" --change "偏好简洁的中文回复"    # 提交偏好建议
 agentbrain lint                        # 体检：重复/过时/无标签/低置信度 → 生成整合提案
@@ -88,6 +90,7 @@ agentbrain snapshot -m "手动备份"      # 手动提交快照（如用 Obsidia
 agentbrain rules --agent trae --write  # 把记忆纪律写进客户端规则文件（项目根目录运行）
 agentbrain rules --agent agentsmd --write  # agents.md 开放标准，覆盖 OpenCode/Gemini CLI 等
 agentbrain rules --agent claude --write --global  # 写进用户级全局规则，所有项目生效
+agentbrain install --agent codex --global         # Codex：MCP + 全局纪律一键接入
 ```
 
 升级到新版本后（`pip install --upgrade mnemosyne-lite`）：
@@ -194,8 +197,14 @@ at task start takes one more line — write the discipline block into the
 project's rule file (run in the project root, idempotent):
 
 ```bash
-agentbrain rules --agent claude --write   # claude / codex / trae / cursor / agentsmd (per-project)
-agentbrain rules --agent claude --write --global  # user-level (~/.claude/CLAUDE.md), all projects
+agentbrain rules --agent codex --write           # per-project AGENTS.md
+agentbrain rules --agent codex --write --global  # user-level ~/.codex/AGENTS.md
+```
+
+Or configure both MCP and the discipline block in one step:
+
+```bash
+agentbrain install --agent codex --global
 ```
 
 It installs a short "agentbrain memory discipline" section into `CLAUDE.md`,
@@ -211,6 +220,8 @@ claude and codex support `--global`.
 | Tool | Purpose |
 |------|---------|
 | `memory_query(query, top_k=5, mode="index", tag=None)` | Search lessons. `mode='index'` returns compact hits (id, summary, tags, path, gist); `mode='full'` adds full text; `tag` narrows results to one tag. |
+| `memory_read(lesson_ids)` | Read selected lessons in full and increment actual-use counters. |
+| `memory_stats()` | Show active, retired, read, unread and most-read lesson counts. |
 | `memory_ingest(case_id, lesson, tags, confidence=0.8, source_summary=None)` | Save a new lesson (facts + scenario + fix, ≤ 30 lines). Creates a file, updates Index.md and log.md. |
 | `memory_lint(scope="all")` | Health check: duplicates, stale, expired, untagged, low-confidence. Writes a merge proposal to `_consolidations/`. |
 | `memory_distill(window_days=30, min_repeat=3)` | Finds cases/tags ingested ≥ N times in the window and writes a promotion proposal. |
