@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .config import Config
 from .locking import atomic_write
+from .models import Lesson
 from .profile import Profile
 from .redact import redaction_hint, scan as scan_secrets
 from .retrieval import _days_since, oneline, search_lessons, tokenize
@@ -70,6 +71,44 @@ def _jaccard(a: set, b: set) -> float:
 _QUERY_MODES = ("index", "full")
 
 
+def _query_gist(content: str, query: str) -> str:
+    """Select a bounded excerpt containing the query's matching terms."""
+    text = " ".join(content.split())
+    if len(text) <= _SUMMARY_CHARS:
+        return text
+    terms = set(tokenize(query))
+    width = _SUMMARY_CHARS - 2
+    best, best_score = oneline(text, _SUMMARY_CHARS), 0
+    for sentence in re.split(r"(?<=[。！？!?；;])\s*|(?<=\.)\s+|\n+", content):
+        sentence = " ".join(sentence.split())
+        for start in range(0, len(sentence), width // 2):
+            part = sentence[start:start + width]
+            matches = terms.intersection(tokenize(part))
+            matches.update(t for t in terms if len(t) == 1 and ord(t) > 127 and t in part)
+            if len(matches) > best_score:
+                best_score = len(matches)
+                best = ("…" if start else "") + part + ("…" if start + width < len(sentence) else "")
+    return best
+
+
+def _full_lesson(lesson: Lesson, vault: Vault, heading: str) -> list[str]:
+    summary = oneline(lesson.source_summary, _SUMMARY_CHARS)
+    if summary and summary not in " ".join(lesson.content.split()):
+        heading += f" {summary}"
+    lines = [heading, f"tags: {', '.join(lesson.tags) or '-'} · path: {vault.relpath(lesson.path)}"]
+    expired = _days_since(lesson.valid_until)
+    if expired is not None and expired >= 0:
+        lines.append(f"EXPIRED: valid_until {lesson.valid_until}; historical context only, revalidate before use.")
+    elif not lesson.verified or lesson.confidence < 0.5:
+        lines.append(f"Unverified or low confidence ({lesson.confidence}); validate before use.")
+    else:
+        age = _days_since(lesson.last_verified_at or lesson.created_at)
+        if age is not None and age > 90:
+            lines.append(f"STALE: last verified {age} days ago; revalidate before use.")
+    lines.extend(["", lesson.content.strip("\r\n"), ""])
+    return lines
+
+
 def memory_query(
     query: str,
     top_k: int = 5,
@@ -106,7 +145,20 @@ def memory_query(
             "If this task produces a reusable lesson, call memory_ingest when done."
         )
 
-    lines = [f"{len(hits)} lesson(s) matched (mode={mode}):", ""]
+    if mode == "full":
+        selected = {lesson.lesson_id: lesson for lesson in v.read_and_bump([l.lesson_id for l, _ in hits])}
+        lines = [f"{len(selected)} lesson(s) matched (mode=full):", ""]
+        for rank, (lesson, _score) in enumerate(hits, 1):
+            current = selected.get(lesson.lesson_id)
+            if current is None:
+                continue
+            if current.superseded_by:
+                lines.append(f"Superseded: {current.lesson_id} -> {current.superseded_by}; call memory_read for the replacement.")
+            else:
+                lines.extend(_full_lesson(current, v, f"{rank}. [{current.lesson_id}]"))
+        return "\n".join(lines).rstrip()
+
+    lines = [f"{len(hits)} lesson(s) matched (mode=index): use memory_read for relevant ids not read this session.", ""]
     for rank, (l, _score) in enumerate(hits, 1):
         lines.append(
             f"{rank}. [{l.lesson_id}] {oneline(l.source_summary, _SUMMARY_CHARS)} "
@@ -115,11 +167,7 @@ def memory_query(
         lines.append(
             f"   tags: {', '.join(l.tags) or '-'} · path: {v.relpath(l.path)}"
         )
-        lines.append(f"   gist: {oneline(l.content, _SUMMARY_CHARS)}")
-        if mode == "full":
-            lines.extend(["", l.content.strip(), ""])
-    if mode == "full":
-        v.bump_use([l.lesson_id for l, _ in hits])
+        lines.append(f"   gist: {_query_gist(l.content, query)}")
     return "\n".join(lines)
 
 
@@ -135,32 +183,21 @@ def memory_read(
 
     if isinstance(lesson_ids, str):
         lesson_ids = [lesson_ids]
-    ids = list(dict.fromkeys(str(i).strip() for i in lesson_ids if str(i).strip()))[:10]
+    ids = list(dict.fromkeys(str(i).strip() for i in lesson_ids if str(i).strip()))
     if not ids:
         return "Refused: no lesson ids supplied."
+    if len(ids) > 10:
+        return "Refused: at most 10 unique lesson ids per read; split the request into batches."
 
-    found: list[Lesson] = []
-    missing: list[str] = []
-    for lesson_id in ids:
-        lesson = v.get(lesson_id)
-        if lesson is None:
-            missing.append(lesson_id)
-        else:
-            found.append(lesson)
-
-    if found:
-        v.bump_use([lesson.lesson_id for lesson in found])
+    found = v.read_and_bump(ids)
+    found_ids = {lesson.lesson_id for lesson in found}
+    missing = [lesson_id for lesson_id in ids if lesson_id not in found_ids]
     lines: list[str] = []
     for lesson in found:
-        lines.extend(
-            [
-                f"## [{lesson.lesson_id}] {lesson.source_summary}",
-                f"tags: {', '.join(lesson.tags) or '-'} · path: {v.relpath(lesson.path)}",
-                "",
-                lesson.content.strip(),
-                "",
-            ]
-        )
+        if lesson.superseded_by:
+            lines.append(f"Superseded: {lesson.lesson_id} -> {lesson.superseded_by}; call memory_read for the replacement.")
+            continue
+        lines.extend(_full_lesson(lesson, v, f"## [{lesson.lesson_id}]"))
     if missing:
         lines.append(f"Not found: {', '.join(missing)}")
     return "\n".join(lines).rstrip()
@@ -466,6 +503,9 @@ def memory_suggest(title: str, change: str, vault: Vault | None = None) -> str:
         return "Refused: empty title."
     if not change or not change.strip():
         return "Refused: empty change."
+    hits = scan_secrets(title) + scan_secrets(change)
+    if hits:
+        return redaction_hint(hits)
     with v.locked():  # suggestion file + audit log + snapshot as one unit
         path = Profile(v).suggest(title, change)
         v._append_log_locked("suggest", v.relpath(path))

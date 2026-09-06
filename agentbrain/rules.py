@@ -14,7 +14,50 @@ from .locking import atomic_write
 
 MARKER = "agentbrain memory discipline"
 
-RULE_BLOCK = """## agentbrain memory discipline
+SESSION_GUIDANCE = """- Follow host authorization rules for memory reads and writes; existing
+  authorization remains valid.
+- At the first substantive task in a conversation session, call `memory_profile`
+  once, not once per MCP connection. Skip mechanical memory calls for small talk
+  or repeated questions.
+- Before substantive work, use `memory_query` (top_k=5) with concrete task/error keywords. When relevant
+  candidates exist, use `memory_read` for 1-3 ids not yet read this session;
+  search hits are candidates, not full lessons.
+- Apply lessons only after checking task preconditions, environment and
+  time-sensitive assumptions against current evidence.
+- Reuse already-read lessons on the same topic. Query again for a new error or
+  subtask only when earlier results do not cover it. No match? Retry once with
+  broader keywords or the other language.
+- Save verified, reusable new findings when authorized. Before `memory_ingest`, check duplicates
+  with `memory_query` (reuse relevant prior results), then read suspected matches
+  not yet read. Avoid duplicate lessons. One lesson = scenario, evidence and fix,
+  <= 30 lines. Never store guesses, transcripts, secrets, tokens or passwords;
+  reference secrets as `${ENV:VAR_NAME}`.
+- Personal preferences go only through `memory_suggest`; Immutable is read-only.
+"""
+
+RULE_BLOCK = f"## {MARKER}\n\n{SESSION_GUIDANCE}"
+
+# Blocks shipped by earlier releases; `rules --write` replaces these in place.
+LEGACY_BLOCKS: list[str] = [
+    """## agentbrain memory discipline
+
+- At task start: call `memory_query` (top_k=5) with the task topic. Query again
+  for a new subtask, error or unfamiliar topic that earlier results do not cover.
+- After each query: call `memory_read` for 1-3 relevant ids not yet read in
+  this session before working; search hits are candidates, not full lessons.
+- Apply a lesson only when its preconditions fit the current task. Check
+  environment-specific and time-sensitive assumptions against current evidence.
+- For the same topic, reuse lessons already read; avoid repeated query/read.
+  No match? Retry once with broader keywords or the other language before
+  concluding nothing is stored.
+- When the task teaches something reusable (pitfall, working approach,
+  corrected assumption), call `memory_ingest` yourself, immediately — no user
+  approval needed. One lesson = one file: facts + applicable scenario + fix,
+  <= 30 lines, no storytelling. Sessions end abruptly; waiting loses lessons.
+- Never write secrets, tokens or passwords into the vault (ingest blocks
+  credential-shaped input; reference secrets as `${ENV:VAR_NAME}`).
+""",
+    """## agentbrain memory discipline
 
 - At task start: call `memory_query` (top_k=5) with the task topic, then call
   `memory_read` for the top 1-3 relevant ids before starting work.
@@ -28,10 +71,7 @@ RULE_BLOCK = """## agentbrain memory discipline
   <= 30 lines, no storytelling. Sessions end abruptly; waiting loses lessons.
 - Never write secrets, tokens or passwords into the vault (ingest blocks
   credential-shaped input; reference secrets as `${ENV:VAR_NAME}`).
-"""
-
-# Blocks shipped by earlier releases; `rules --write` replaces these in place.
-LEGACY_BLOCKS: list[str] = [
+""",
     """## agentbrain memory discipline
 
 - At task start: call `memory_query` (top_k=5) with the task topic; read the

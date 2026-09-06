@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from inspect import signature
+import sys
+
 try:  # mcp >= 2.0
     from mcp.server.mcpserver import MCPServer as _Server
 except ImportError:  # mcp 1.x
@@ -8,26 +11,37 @@ except ImportError:  # mcp 1.x
 from . import api
 from .config import Config
 from .profile import Profile
+from .rules import SESSION_GUIDANCE
 from .vault import Vault, VaultNotInitialized
 
-mcp = _Server("agentbrain")
+SERVER_INSTRUCTIONS = "Use agentbrain's local Markdown memory for substantive work:\n\n" + SESSION_GUIDANCE
+
+if "instructions" in signature(_Server).parameters:
+    mcp = _Server("agentbrain", instructions=SERVER_INSTRUCTIONS)
+else:
+    mcp = _Server("agentbrain")
+    print(
+        "agentbrain: this MCP SDK does not support server instructions (available since 1.3.0); "
+        "memory tools remain available, but session guidance requires client rules.",
+        file=sys.stderr,
+    )
 
 
 def memory_query(
     query: str, top_k: int = 5, mode: str = "index", tag: str | None = None
 ) -> str:
-    """Search long-term memory for lessons from earlier tasks. Call at task
-    start with the task topic, again on any new subtask, error or unfamiliar
-    topic, and before debugging anything — a prior lesson may already hold the
-    answer. mode='index' (default): compact hits (id, summary, tags, path,
-    gist); mode='full': full text. Optional tag=<tag> filters by tag. No
-    match? Retry once with broader keywords or the other language."""
+    """Search active lessons by concrete task/error keywords. mode='index'
+    returns compact candidates without counting reads; mode='full' reads and
+    counts full text. top_k is clamped to 1-20; tag optionally filters results.
+    Expired/superseded lessons are excluded. No match? Retry once with broader
+    keywords or the other language."""
     return api.memory_query(query=query, top_k=top_k, mode=mode, tag=tag)
 
 
 def memory_read(lesson_ids: list[str]) -> str:
-    """Read selected lessons in full after memory_query identifies relevant
-    candidates. Reading records actual use; pass at most 10 lesson ids."""
+    """Read selected lessons in full; pass at most 10 unique ids. Active reads
+    count once per id per call. Superseded ids point to replacements; expired
+    content is labelled and does not increase usage."""
     return api.memory_read(lesson_ids=lesson_ids)
 
 
@@ -44,10 +58,9 @@ def memory_ingest(
     confidence: float = 0.8,
     source_summary: str | None = None,
 ) -> str:
-    """Save a reusable lesson to long-term memory. Call autonomously the moment
-    the task teaches something worth keeping (pitfall, working approach,
-    corrected assumption) — do not wait for user approval or session end.
-    Format: facts + applicable scenario + fix, <= 30 lines, no storytelling.
+    """Add a verified, reusable lesson after duplicate checks and host
+    authorization. Format: facts + applicable scenario + fix, <= 30 lines;
+    source_summary <= 60 chars. Do not save guesses or conversation transcripts.
     Creates a new file only — never edits existing lessons; near-duplicates are
     flagged; credential-shaped content is refused automatically."""
     return api.memory_ingest(
@@ -73,9 +86,8 @@ def memory_distill(window_days: int = 30, min_repeat: int = 3) -> str:
 
 
 def memory_profile() -> str:
-    """Return the owner profile: hard rules (Agent-Profile/Immutable) and soft
-    preferences (Agent-Profile/Mutable-Hints). Read-only. Call once per
-    session; tailor tone, language and formatting accordingly."""
+    """Read the owner's hard rules (Immutable) and soft preferences
+    (Mutable-Hints). The profile is read-only; changes go through memory_suggest."""
     return api.memory_profile()
 
 
@@ -87,14 +99,12 @@ def memory_suggest(title: str, change: str) -> str:
     return api.memory_suggest(title=title, change=change)
 
 
-mcp.add_tool(memory_query)
-mcp.add_tool(memory_read)
-mcp.add_tool(memory_stats)
-mcp.add_tool(memory_ingest)
-mcp.add_tool(memory_lint)
-mcp.add_tool(memory_distill)
-mcp.add_tool(memory_profile)
-mcp.add_tool(memory_suggest)
+_text_options = {"structured_output": False} if "structured_output" in signature(mcp.add_tool).parameters else {}
+for _tool in (
+    memory_query, memory_read, memory_stats, memory_ingest,
+    memory_lint, memory_distill, memory_profile, memory_suggest,
+):
+    mcp.add_tool(_tool, **_text_options)
 
 
 def _open() -> Vault | None:

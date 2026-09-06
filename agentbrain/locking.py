@@ -96,11 +96,11 @@ def vault_lock(root: Path, timeout: float = 10.0) -> Iterator[None]:
         os.close(fd)
 
 
-def atomic_write(path: Path, text: str) -> None:
+def atomic_write(path: Path, text: str, *, newline: str | None = None) -> None:
     """Write via temp file + atomic replace, so readers never see torn files."""
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     try:
-        tmp.write_text(text, encoding="utf-8")
+        tmp.write_text(text, encoding="utf-8", newline=newline)
         os.replace(tmp, path)
     finally:
         if tmp.exists():

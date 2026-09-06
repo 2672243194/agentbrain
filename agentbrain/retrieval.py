@@ -4,21 +4,47 @@ import math
 import re
 from collections import Counter
 from datetime import date, datetime
+from functools import lru_cache
 
 from .models import Lesson
 
 _WORD = re.compile(r"[A-Za-z0-9_]+")
 _CJK_RUN = re.compile(r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+")
+_IDENTIFIER_BOUNDARY = re.compile(
+    r"_+|(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])"
+)
+_TOKEN_CACHE_SIZE = 256
+_TOKEN_CACHE_MAX_CHARS = 2048
 
 
-def tokenize(text: str) -> list[str]:
-    tokens = [w.lower() for w in _WORD.findall(text or "")]
+def _tokenize_uncached(text: str) -> list[str]:
+    tokens: list[str] = []
+    for word in _WORD.findall(text or ""):
+        normalized = word.lower()
+        tokens.append(normalized)
+        if "_" in word or not word.islower():
+            parts = [part.lower() for part in _IDENTIFIER_BOUNDARY.split(word) if part]
+            if parts != [normalized]:
+                tokens.extend(parts)
     for run in _CJK_RUN.findall(text or ""):
         if len(run) == 1:
             tokens.append(run)
         else:
             tokens.extend(run[i : i + 2] for i in range(len(run) - 1))
     return tokens
+
+
+@lru_cache(maxsize=_TOKEN_CACHE_SIZE)
+def _cached_tokens(text: str) -> tuple[str, ...]:
+    return tuple(_tokenize_uncached(text))
+
+
+def tokenize(text: str) -> list[str]:
+    """Reuse bounded text-only tokenization; callers always own their list."""
+    text = text or ""
+    if len(text) > _TOKEN_CACHE_MAX_CHARS:
+        return _tokenize_uncached(text)
+    return list(_cached_tokens(text))
 
 
 def oneline(text: str, n: int) -> str:
@@ -52,15 +78,25 @@ class BM25:
         return s
 
 
-def _doc_tokens(lesson: Lesson) -> list[str]:
+def _doc_tokens(lesson: Lesson, single_cjk: set[str] | None = None) -> list[str]:
+    def field_tokens(text: str) -> list[str]:
+        tokens = tokenize(text)
+        if single_cjk:
+            # Only index individual characters explicitly requested by this
+            # query. Ordinary CJK queries retain bigram precision.
+            for run in _CJK_RUN.findall(text or ""):
+                if len(run) > 1:
+                    tokens.extend(char for char in run if char in single_cjk)
+        return tokens
+
     tag_tokens: list[str] = []
     for tag in lesson.tags:
-        tag_tokens.extend(tokenize(tag))
+        tag_tokens.extend(field_tokens(tag))
     return (
-        tokenize(lesson.source_summary) * 3
+        field_tokens(lesson.source_summary) * 3
         + tag_tokens * 2
-        + tokenize(lesson.case_id)
-        + tokenize(lesson.content)
+        + field_tokens(lesson.case_id)
+        + field_tokens(lesson.content)
     )
 
 
@@ -89,17 +125,26 @@ def _boost(lesson: Lesson) -> float:
 
 
 def search_lessons(lessons: list[Lesson], query: str) -> list[tuple[Lesson, float]]:
-    if not lessons:
-        return []
-    q = tokenize(query)
+    q = list(dict.fromkeys(tokenize(query)))
     if not q:
         return []
-    bm25 = BM25([_doc_tokens(l) for l in lessons])
+    active: list[Lesson] = []
+    for lesson in lessons:
+        expired_days = _days_since(lesson.valid_until)
+        if not lesson.superseded_by and (expired_days is None or expired_days < 0):
+            active.append(lesson)
+    if not active:
+        return []
+    single_cjk = {token for token in q if len(token) == 1 and _CJK_RUN.fullmatch(token)}
+    bm25 = BM25([_doc_tokens(lesson, single_cjk) for lesson in active])
     scored: list[tuple[Lesson, float]] = []
-    for i, lesson in enumerate(lessons):
+    for i, lesson in enumerate(active):
         s = bm25.score(q, i)
         if s <= 0:
             continue
-        scored.append((lesson, s * _boost(lesson)))
+        # Reward covering the task's distinct keywords so popular partial
+        # matches cannot rely on their read history alone to rank highly.
+        coverage = sum(token in bm25.tfs[i] for token in q) / len(q)
+        scored.append((lesson, s * coverage * _boost(lesson)))
     scored.sort(key=lambda x: (-x[1], x[0].lesson_id))
     return scored

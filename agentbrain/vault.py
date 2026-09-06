@@ -1,23 +1,35 @@
 from __future__ import annotations
 
 import datetime as dt
+import math
 import re
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Iterator
 
 from .config import Config
-from .frontmatter import dump, parse
+from .frontmatter import Document, dump, parse_document
 from .locking import atomic_write, vault_lock
 from .models import Lesson
-from .retrieval import oneline
+from .retrieval import _days_since, oneline
 from .snapshot import Snapshot
 
 _DATE = "%Y-%m-%d"
 _LOG_RE = re.compile(r"^## \[(\d{4}-\d{2}-\d{2})\] (.+)$")
+_UNSAFE_FILENAME = re.compile(r'[\\/:*?"<>|\x00-\x1f\x7f]')
 
 
 class VaultNotInitialized(RuntimeError):
     pass
+
+
+def _safe_filename(name: str) -> bool:
+    # Apply Windows filename rules on every platform, including device aliases
+    # (CON.md, COM1.md, etc.) and NTFS alternate data streams.
+    return (
+        bool(name)
+        and not _UNSAFE_FILENAME.search(name)
+        and not PureWindowsPath(name).is_reserved()
+    )
 
 
 def _as_tags(value) -> list[str]:
@@ -32,15 +44,16 @@ def _as_tags(value) -> list[str]:
 
 def _as_float(value, default: float) -> float:
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        number = float(value)
+        return number if math.isfinite(number) else default
+    except (TypeError, ValueError, OverflowError):
         return default  # hand-edited frontmatter must not poison vault reads
 
 
 def _as_int(value, default: int) -> int:
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return default
 
 
@@ -81,9 +94,8 @@ class Vault:
             return str(path)
 
     def locked(self) -> "Iterator[None]":
-        """Hold the vault write lock; nest via re-entrancy is NOT supported —
-        public write methods already lock internally, use this only to wrap
-        multi-step transactions (e.g. apply_proposal)."""
+        """Hold the re-entrant vault write lock for multi-step transactions
+        (e.g. apply_proposal). Public write methods already lock internally."""
         return vault_lock(self.root)
 
     def _snapshot_locked(self, message: str) -> None:
@@ -108,13 +120,22 @@ class Vault:
         return out
 
     def load_lesson(self, path: Path) -> Lesson | None:
+        document = self._read_document(path)
+        return self._lesson_from_document(path, document) if document else None
+
+    @staticmethod
+    def _read_document(path: Path) -> Document | None:
         try:
-            text = path.read_text(encoding="utf-8-sig")  # tolerate a BOM from Windows editors
-        except OSError:
+            if not _safe_filename(path.name) or not path.is_file():
+                return None
+            with path.open("r", encoding="utf-8", newline="") as stream:
+                return parse_document(stream.read())
+        except (OSError, UnicodeError, ValueError):
             return None
-        if not text.startswith("---"):
-            return None  # not a lesson (e.g. a stray README.md)
-        meta, body = parse(text)
+
+    @staticmethod
+    def _lesson_from_document(path: Path, document: Document) -> Lesson | None:
+        meta, body = document.meta, document.body
         if not any(
             k in meta for k in ("case_id", "source_summary", "tags", "use_count", "created_at")
         ):
@@ -123,15 +144,15 @@ class Vault:
             lesson_id=path.stem,
             case_id=str(meta.get("case_id", path.stem)),
             source_summary=str(meta.get("source_summary", "")).strip(),
-            content=body.strip(),
+            content=body.strip("\r\n"),
             tags=_as_tags(meta.get("tags")),
             created_at=str(meta.get("created_at", "")),
             last_verified_at=str(meta.get("last_verified_at", "")),
             valid_until=str(meta.get("valid_until", "") or ""),
-            confidence=_as_float(meta.get("confidence"), 0.8),
+            confidence=max(0.0, min(1.0, _as_float(meta.get("confidence"), 0.8))),
             verified=_as_bool(meta.get("verified"), True),
             superseded_by=str(meta.get("superseded_by", "") or ""),
-            use_count=_as_int(meta.get("use_count") or 0, 0),
+            use_count=max(0, _as_int(meta.get("use_count") or 0, 0)),
             path=path,
         )
 
@@ -143,21 +164,26 @@ class Vault:
         if not self.learnings_dir.is_dir():
             return out
         for p in sorted(self.learnings_dir.glob("*.md")):
-            try:
-                text = p.read_text(encoding="utf-8-sig")
-            except OSError:
+            document = self._read_document(p)
+            if document is None:
                 out.append(p)
                 continue
-            if text.startswith("---") and self.load_lesson(p) is None:
+            if (
+                document.text.lstrip("\ufeff").startswith("---")
+                and self._lesson_from_document(p, document) is None
+            ):
                 out.append(p)
         return out
 
     def get(self, lesson_id: str) -> Lesson | None:
-        # lesson_id becomes a file name component — reject path separators
-        if not lesson_id or "/" in lesson_id or "\\" in lesson_id or ".." in lesson_id:
+        p = self._lesson_path(lesson_id)
+        return self.load_lesson(p) if p is not None else None
+
+    def _lesson_path(self, lesson_id: str) -> Path | None:
+        filename = f"{lesson_id}.md"
+        if not lesson_id or ".." in lesson_id or not _safe_filename(filename):
             return None
-        p = self.learnings_dir / f"{lesson_id}.md"
-        return self.load_lesson(p) if p.is_file() else None
+        return self.learnings_dir / filename
 
     def save(self, lesson: Lesson, action: str | None = None) -> None:
         with self.locked():
@@ -221,15 +247,32 @@ class Vault:
         return f"{prefix}{n + 1:02d}"
 
     def bump_use(self, lesson_ids: list[str]) -> None:
+        self.read_and_bump(lesson_ids)
+
+    def read_and_bump(self, lesson_ids: list[str]) -> list[Lesson]:
+        """Read selected lessons once and atomically record active lesson use.
+
+        Return the pre-increment objects, in first-requested order. Reading
+        retired/expired lessons remains possible without reinforcing them.
+        """
         if not lesson_ids:
-            return
+            return []
+        found: list[Lesson] = []
         with self.locked():
-            for lesson_id in lesson_ids:
-                lesson = self.get(lesson_id)
+            for lesson_id in dict.fromkeys(lesson_ids):
+                path = self._lesson_path(lesson_id)
+                document = self._read_document(path) if path is not None else None
+                lesson = self._lesson_from_document(path, document) if document else None
                 if lesson is None:
                     continue
-                lesson.use_count += 1
-                self._save_locked(lesson, rebuild=False)
+                found.append(lesson)
+                expiry = _days_since(lesson.valid_until)
+                if lesson.superseded_by or (expiry is not None and expiry >= 0):
+                    continue
+                updated = document.with_integer("use_count", lesson.use_count + 1)
+                if updated is not None:
+                    atomic_write(path, updated, newline="")
+        return found
 
     def verify(self, lesson_ids: list[str]) -> tuple[list[str], list[str]]:
         """Stamp last_verified_at with today for the given lessons.

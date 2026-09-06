@@ -108,7 +108,7 @@ def test_rules_write_refresh_preserves_trailing_sections(tmp_path):
     assert "## My own section" in text
     assert "- custom bullet" in text
     assert text.index("## agentbrain memory discipline") < text.index("## My own section")
-    assert "no user approval needed" in " ".join(text.split())
+    assert "host authorization rules" in " ".join(text.split())
 
 
 def test_rules_write_current_block_is_noop(tmp_path):
@@ -140,5 +140,5 @@ def test_rules_write_refreshes_mdc_block(tmp_path):
     assert "Updated outdated" in out
     text = p.read_text(encoding="utf-8")
     assert text.startswith("---")
-    assert "no user approval needed" in " ".join(text.split())
+    assert "host authorization rules" in " ".join(text.split())
     assert "with user confirmation" not in text

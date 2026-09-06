@@ -153,11 +153,12 @@ def test_ingest_distinct_summaries_get_no_warning(vault: Vault):
     assert "note:" not in out
 
 
-def test_rule_block_grants_autonomous_ingest():
+def test_rule_block_conditions_learning_on_verification_and_authorization():
     block = " ".join(RULE_BLOCK.split())  # collapse line wraps
-    assert "no user approval needed" in block
-    assert "with user confirmation" not in block
-    assert "immediately" in block
+    assert "host authorization rules" in block
+    assert "verified, reusable" in block
+    assert "check duplicates" in block
+    assert "no user approval needed" not in block
     assert "error" in block  # mid-task re-query trigger
 
 
@@ -172,13 +173,14 @@ def test_query_no_match_message_suggests_retry(vault: Vault):
     assert "Chinese" in out
 
 
-def test_mcp_tool_descriptions_direct_recall_and_autonomy():
+def test_mcp_tool_descriptions_explain_retrieval_and_safe_ingest():
     from agentbrain import mcp_server
 
     q = " ".join(mcp_server.memory_query.__doc__.split())
-    assert "task start" in q
-    assert "before debugging" in q
+    assert "task/error keywords" in q
+    assert "without counting reads" in q
     assert "Retry" in q
     i = " ".join(mcp_server.memory_ingest.__doc__.split())
-    assert "autonomously" in i
-    assert "do not wait for user approval" in i
+    assert "verified, reusable" in i
+    assert "duplicate checks and host authorization" in i
+    assert "do not wait for user approval" not in i
