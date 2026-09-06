@@ -4,8 +4,10 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import types
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 from inspect import signature
 from pathlib import Path
 
@@ -69,6 +71,41 @@ main()
 """
 
 
+def _stdio_exchange(requests, root, cwd):
+    responses = {}
+    with tempfile.TemporaryFile() as stderr, subprocess.Popen(
+        [sys.executable, "-I", "-c", BOOTSTRAP],
+        env=dict(os.environ, AGENTBRAIN_VAULT=str(root)), cwd=cwd,
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr,
+        text=True, encoding="utf-8",
+    ) as process, ThreadPoolExecutor(max_workers=1) as reader:
+        try:
+            for request in requests:
+                process.stdin.write(json.dumps(request) + "\n")
+                process.stdin.flush()
+                if "id" not in request:
+                    continue
+                # Complete initialization before sending later requests, and
+                # keep stdin open until each response arrives: EOF can cancel
+                # pending SDK handlers, especially on Windows.
+                while request["id"] not in responses:
+                    line = reader.submit(process.stdout.readline).result(timeout=25)
+                    assert line, "MCP server closed stdout before responding"
+                    message = json.loads(line)
+                    if "id" in message:
+                        responses[message["id"]] = message
+            process.stdin.close()
+            process.wait(timeout=25)
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=5)
+        stderr.seek(0)
+        diagnostics = stderr.read().decode("utf-8", errors="replace")
+        assert process.returncode == 0, diagnostics
+    return responses, diagnostics
+
+
 @pytest.mark.parametrize("initialized", [False, True])
 def test_stdio_initialize_contains_instructions_without_vault_access(tmp_path, initialized):
     root = tmp_path / "vault"
@@ -91,21 +128,14 @@ def test_stdio_initialize_contains_instructions_without_vault_access(tmp_path, i
         {"jsonrpc": "2.0", "method": "notifications/initialized"},
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
     ]
-    result = subprocess.run(
-        [sys.executable, "-I", "-c", BOOTSTRAP],
-        input="".join(json.dumps(request) + "\n" for request in requests),
-        env=dict(os.environ, AGENTBRAIN_VAULT=str(root)), cwd=tmp_path,
-        capture_output=True, text=True, encoding="utf-8", timeout=25,
-    )
-    assert result.returncode == 0, result.stderr
-    responses = {message["id"]: message for message in map(json.loads, result.stdout.splitlines()) if "id" in message}
+    responses, diagnostics = _stdio_exchange(requests, root, tmp_path)
     assert "error" not in responses[1], responses[1]
     assert "error" not in responses[2], responses[2]
     if "instructions" in signature(mcp_server._Server).parameters:
         assert responses[1]["result"]["instructions"] == mcp_server.SERVER_INSTRUCTIONS
     else:
         assert not responses[1]["result"].get("instructions")
-        assert "does not support server instructions" in result.stderr
+        assert "does not support server instructions" in diagnostics
     tools = {tool["name"]: tool for tool in responses[2]["result"]["tools"]}
     assert tools.keys() == EXPECTED_INPUTS.keys()
     for name, expected in EXPECTED_INPUTS.items():
