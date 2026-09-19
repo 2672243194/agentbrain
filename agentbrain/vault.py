@@ -235,16 +235,41 @@ class Vault:
             path=self.learnings_dir / f"{lesson_id}.md",
         )
 
+    def _prepare_metadata_update(
+        self, lesson_id: str, updates: dict[str, str | int | bool],
+    ) -> tuple[Lesson, str]:
+        """Prepare a lossless field update; call while holding the write lock."""
+        path = self._lesson_path(lesson_id)
+        document = self._read_document(path) if path is not None else None
+        lesson = self._lesson_from_document(path, document) if document else None
+        if lesson is None:
+            raise ValueError(f"Lesson not found: {lesson_id}")
+        for key, value in updates.items():
+            text = document.with_scalar(key, value)
+            if text is None:
+                raise ValueError(f"Cannot safely update {key} in {lesson_id}; review its YAML field by hand.")
+            document = parse_document(text)
+            if document.meta.get(key) != value:
+                raise ValueError(f"Cannot safely update {key} in {lesson_id}; review its YAML field by hand.")
+        updated = self._lesson_from_document(path, document)
+        if updated is None:
+            raise ValueError(f"Cannot safely update metadata in {lesson_id}.")
+        return updated, document.text
+
     def next_lesson_id(self, case_id: str) -> str:
         prefix = f"{case_id}-lesson-"
         n = 0
         if self.learnings_dir.is_dir():
-            rx = re.compile(rf"^{re.escape(prefix)}(\d+)$")
+            rx = re.compile(rf"^{re.escape(prefix)}(\d+)$", re.IGNORECASE)
             for p in self.learnings_dir.glob("*.md"):  # glob metachars in case_id
                 m = rx.match(p.stem)  # would silently miss files → id collision
                 if m:
                     n = max(n, int(m.group(1)))
-        return f"{prefix}{n + 1:02d}"
+        candidate = f"{prefix}{n + 1:02d}"
+        while (self.learnings_dir / f"{candidate}.md").exists():
+            n += 1
+            candidate = f"{prefix}{n + 1:02d}"
+        return candidate
 
     def bump_use(self, lesson_ids: list[str]) -> None:
         self.read_and_bump(lesson_ids)
@@ -284,14 +309,17 @@ class Vault:
         verified: list[str] = []
         missing: list[str] = []
         with self.locked():
-            for lesson_id in lesson_ids:
+            prepared: list[tuple[Lesson, str]] = []
+            for lesson_id in dict.fromkeys(lesson_ids):
                 lesson = self.get(lesson_id)
                 if lesson is None:
                     missing.append(lesson_id)
                     continue
-                lesson.last_verified_at = today
-                self._save_locked(lesson, action="verify", rebuild=False)
-                verified.append(lesson_id)
+                prepared.append(self._prepare_metadata_update(lesson_id, {"last_verified_at": today}))
+            for lesson, text in prepared:
+                atomic_write(lesson.path, text, newline="")
+                self._append_log_locked("verify", lesson.lesson_id, lesson.tags)
+                verified.append(lesson.lesson_id)
             if verified:
                 self._rebuild_index_locked()
                 self._snapshot_locked(f"verify: {len(verified)} lesson(s)")

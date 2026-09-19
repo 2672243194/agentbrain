@@ -4,13 +4,13 @@
 > then come back here.
 
 You (the AI agent) share this vault across all sessions and tools (Claude Code,
-Codex, OpenCode, Cursor, ...). Read this file at session start. It is small on purpose.
+Codex, OpenCode, Cursor, ...). Use this workflow for substantive tasks.
 
 ## Vault layout
 
 | Path | Meaning | Your access |
 |------|---------|-------------|
-| `Case-Learnings/Index.md` | Index of all lessons — read this FIRST | read |
+| `Case-Learnings/Index.md` | Lesson catalog for file-only access; MCP searches selectively | read |
 | `Case-Learnings/Learnings/*.md` | One lesson per file | read, create |
 | `Case-Learnings/log.md` | Append-only audit log | maintained by tools |
 | `Case-Learnings/_consolidations/` | Merge / promotion proposals | create, read |
@@ -20,36 +20,34 @@ Codex, OpenCode, Cursor, ...). Read this file at session start. It is small on p
 
 ## Session workflow
 
-1. **Know the owner** — call `memory_profile` once per session (or read resource
-   `agentbrain://profile`) and tailor language, tone and formatting accordingly.
-2. **Task start** — call `memory_query` with the task topic (`top_k=5`).
-   Mid-task, re-query on any new subtask, error or unfamiliar topic — a stored
-   lesson may already hold the fix; retry with broader keywords or the other
-   language before concluding nothing is stored.
-   If MCP tools are unavailable, read `Case-Learnings/Index.md` and grep `Learnings/`.
-3. **Before answering** — call `memory_read` for the top 1–3 relevant ids. This
-   records actual use; a compact query result alone does not count as use. In
-   file-only mode, open the corresponding lesson files instead.
-4. **During the task** — NEVER edit or delete existing lessons. Create new ones only.
-5. **When you learn something reusable** — call `memory_ingest` immediately and
-   autonomously, no owner confirmation needed (low-value lessons simply rank
-   low and get cleaned by lint — waiting for approval loses more than it saves).
-   One lesson = one file = facts + applicable scenario + fix, ≤ 30 lines, no storytelling.
-6. **Observed a preference?** — call `memory_suggest` with a short title and the
-   proposed change. Never edit `Agent-Profile/` yourself; the owner reviews
-   `_suggestions/` and decides.
-7. **Session wrap-up** — when a substantive task ends, reflect once: what did this
-   session teach that is worth remembering? Ingest each distinct lesson now
-   (facts + scenario + fix, one file each) if not already ingested. Durable
-   preference shift → `memory_suggest`. Then tell the owner in one line what you
-   stored (or "nothing worth keeping"). Trivial sessions (small talk, quick
-   lookups) need no wrap-up. Triggered by the owner saying e.g.
-   "总结一下这次对话" / "wrap up", or proactively at natural task completion.
-8. **Housekeeping (when the owner asks, or weekly)** — `memory_lint` writes proposals
-   to `_consolidations/`. The owner merges content by hand and runs
-   `agentbrain apply <file>`; never apply a proposal yourself.
-9. **Recurring patterns** — `memory_distill` proposes promoting repeated patterns
-   into a distilled lesson (human approval required).
+- Follow host authorization rules for memory reads and writes; existing
+  authorization remains valid.
+- At the first substantive task in a conversation session, call `memory_profile`
+  once, not once per MCP connection. Skip mechanical memory calls for small talk
+  or repeated questions.
+- Before substantive work, use `memory_query` (top_k=5) with concrete task/error keywords. When relevant
+  candidates exist, use `memory_read` for 1-3 ids not yet read this session;
+  search hits are candidates, not full lessons.
+- Apply lessons only after checking task preconditions, environment and
+  time-sensitive assumptions against current evidence.
+- Reuse already-read lessons on the same topic. Query again for a new error or
+  subtask only when earlier results do not cover it. No match? Retry once with
+  broader keywords or the other language.
+- Save verified, reusable new findings when authorized. Before `memory_ingest`, check duplicates
+  with `memory_query` (reuse relevant prior results), then read suspected matches
+  not yet read. Avoid duplicate lessons. One lesson = scenario, evidence and fix,
+  <= 30 lines. Never store guesses, transcripts, secrets, tokens or passwords;
+  reference secrets as `${ENV:VAR_NAME}`.
+- Personal preferences go only through `memory_suggest`; Immutable is read-only.
+
+If MCP tools are unavailable, read `Case-Learnings/Index.md` and select relevant
+lesson files in `Learnings/`. Reuse files already read on the same topic.
+Do not hand-write lessons; use MCP/CLI when available or tell the owner what
+could be saved. Existing lessons and profiles remain read-only to agents.
+
+**Housekeeping only when the owner asks** — `memory_lint` and `memory_distill`
+write proposals to `_consolidations/`. The owner reviews and merges the proposal,
+then runs `agentbrain apply <file>`; never apply a proposal yourself.
 
 ## MCP resources (read-only context)
 
@@ -66,5 +64,5 @@ Codex, OpenCode, Cursor, ...). Read this file at session start. It is small on p
   at runtime via shell. The vault is plain text and may be synced, shared or committed.
 - **Append-only.** Existing lessons are immutable history. Corrections go into a new
   lesson or a `_consolidations/` proposal — never an in-place edit.
-- **Token discipline.** Keep `source_summary` ≤ 60 chars; the index is the first
-  retrieval layer and is read often.
+- **Token discipline.** Keep `source_summary` ≤ 60 chars. Use compact search
+  results and selected reads; MCP access does not require loading the whole index.

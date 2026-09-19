@@ -25,6 +25,7 @@ _LEGACY = {
         "legacy/AGENTS-0.4.1.md",
         "legacy/AGENTS-0.4.3.md",
         "legacy/AGENTS-0.4.6.md",
+        "legacy/AGENTS-0.6.0.md",
     ),
     "ONBOARDING.md": (),
 }
@@ -69,12 +70,12 @@ def upgrade(root: Path | str) -> str:
     profiles, logs or the index."""
     root = Path(root).expanduser().resolve()
     v = Vault(root)
-    if not v.root.is_dir():
+    if not v.is_initialized():
         return f"No vault found at '{root}'. Run: agentbrain init \"{root}\""
-    status = template_status(root)
     lines = [f"agentbrain upgrade: {root}", ""]
     changed = False
     with v.locked():
+        status = template_status(root)
         for name in _UPDATABLE:
             s = status[name]
             if s == "current":

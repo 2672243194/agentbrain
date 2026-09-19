@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.1 — 2026-09-19
+
+- Keep lesson IDs readable after ingest and prevent case-variant IDs from overwriting lessons on Windows.
+- Validate complete replacement graphs and all metadata updates before applying proposals; generate unambiguous duplicate-merge proposals.
+- Preserve custom YAML fields, comments, BOM, line endings and Markdown when verifying or superseding lessons.
+- Honor explicit Vault selection for the MCP server and diagnostics; refuse upgrades outside initialized Vaults and check custom templates under the write lock.
+- Align Vault onboarding with selective reads, applicability checks, duplicate checks and host authorization; preserve migration and customized-template protection.
+- Clarify client-dependent memory guidance and distinguish read counts from adoption or task outcomes.
+
 ## 0.6.0 — 2026-09-07
 
 ## Changes

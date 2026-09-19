@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import re
 from collections import Counter
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from .config import Config
 from .locking import atomic_write
@@ -15,7 +15,7 @@ from .vault import Vault, VaultNotInitialized
 
 _SUMMARY_CHARS = 160
 _TOP_K_MAX = 20
-_UNSAFE_CASE = re.compile(r'[\\/:*?"<>|\s]+')
+_UNSAFE_CASE = re.compile(r'[\\/:*?"<>|\s\x00-\x1f\x7f]+|\.{2,}')
 _CASE_ID_MAX = 48  # keeps lesson filenames within Windows path limits on long case ids
 
 
@@ -25,7 +25,13 @@ def _open_vault(vault: Vault | None) -> Vault:
 
 def _clean_case_id(case_id: str) -> str:
     cid = _UNSAFE_CASE.sub("-", (case_id or "").strip())[:_CASE_ID_MAX]
-    return cid or "misc"
+    cid = cid or "misc"
+    # The resulting lesson ID must pass the same Windows filename boundary as
+    # reads, even on POSIX. A device name before a dot (e.g. CON.notes) is still
+    # reserved after appending the lesson suffix.
+    if PureWindowsPath(f"{cid}-lesson-01.md").is_reserved():
+        cid = ("_" + cid)[:_CASE_ID_MAX]
+    return cid
 
 
 def _normalize_tags(tags) -> tuple[list[str], list[str]]:
@@ -329,29 +335,42 @@ def memory_lint(scope: str = "all", vault: Vault | None = None) -> str:
     proposals: list[str] = []
     all_ids = {l.lesson_id for l in all_lessons}  # DANGLING must look beyond scope
     active = [l for l in lessons if not l.superseded_by]
+    expired_ids = {
+        lesson.lesson_id for lesson in active
+        if (expiry := _days_since(lesson.valid_until)) is not None and expiry >= 0
+    }
 
     pre = [
         (l, set(tokenize(l.source_summary)), set(l.tags), set(tokenize(l.content)))
-        for l in active
+        for l in sorted(
+            active,
+            key=lambda lesson: (
+                lesson.lesson_id in expired_ids, -lesson.use_count, lesson.lesson_id,
+            ),
+        )
     ]
-    for i, (a, sa, ta, ca) in enumerate(pre):
-        for b, sb, tb, cb in pre[i + 1 :]:
-            if _similar_pre(sa, ta, ca, sb, tb, cb):
-                findings.append(
-                    f"DUPLICATE {a.lesson_id} ≈ {b.lesson_id} — merge proposal below"
-                )
-                keeper, gone = (
-                    (a, b) if a.use_count >= b.use_count else (b, a)
-                )  # keep the more-used lesson; the merge direction follows usage
-                proposals.append(
-                    f"### Merge {gone.lesson_id} into {keeper.lesson_id}\n"
-                    f"- {a.lesson_id}: {a.source_summary} (used {a.use_count})\n"
-                    f"- {b.lesson_id}: {b.source_summary} (used {b.use_count})\n"
-                    f"- Review both lessons; merge any unique content from "
-                    f"{gone.lesson_id} into {keeper.lesson_id} by hand, then run\n"
-                    f"  `agentbrain apply <this-file>`\n\n"
-                    f"```agentbrain\nsupersede: {gone.lesson_id} -> {keeper.lesson_id}\n```\n"
-                )
+    keepers = []
+    for candidate in pre:
+        gone, sa, ta, ca = candidate
+        for keeper, sb, tb, cb in keepers:
+            if not _similar_pre(sa, ta, ca, sb, tb, cb):
+                continue
+            findings.append(
+                f"DUPLICATE {gone.lesson_id} ≈ {keeper.lesson_id} — merge proposal below"
+            )
+            proposals.append(
+                f"### Merge {gone.lesson_id} into {keeper.lesson_id}\n"
+                f"- {gone.lesson_id}: {gone.source_summary} (used {gone.use_count})\n"
+                f"- {keeper.lesson_id}: {keeper.source_summary} (used {keeper.use_count})\n"
+                f"- Review both lessons; merge any unique content from "
+                f"{gone.lesson_id} into {keeper.lesson_id} by hand, then run\n"
+                f"  `agentbrain apply <this-file>`\n\n"
+                f"```agentbrain\nsupersede: {gone.lesson_id} -> {keeper.lesson_id}\n```\n"
+            )
+            break
+        else:
+            if gone.lesson_id not in expired_ids:
+                keepers.append(candidate)
 
     for l in lessons:
         retired = bool(l.superseded_by)

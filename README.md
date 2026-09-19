@@ -112,7 +112,7 @@ agentbrain rules --agent trae --write # 刷新各项目规则文件里的纪律�
 | 记忆整理（清重复/过时） | `agentbrain lint` → 审核 → `agentbrain apply <提案>` | 约一周一次 |
 | 手改文件后备份 | `agentbrain snapshot` | 改完就跑 |
 
-其余全自动：Agent 会话开始读偏好、任务前查经验、学到东西写入（每次写入自动 git 快照，可回滚）。
+支持服务器 instructions 的客户端会获得默认引导：首次实质任务读偏好，任务前检索并选读相关经验，核对适用条件后使用；新经验须经过验证、查重并符合宿主授权规则后入库。客户端是否实际调用工具取决于其实现和规则，服务端不能保证自动执行。
 
 在 MCP 客户端里接入（以 Claude Code 为例）：
 
@@ -138,7 +138,7 @@ claude mcp add agentbrain -- agentbrain serve
 
 Vault 路径解析顺序：`--vault` 参数 > `AGENTBRAIN_VAULT` 环境变量 > `~/agentbrain`。
 
-注册 MCP 只让 agent **能**调记忆工具；要让它**每次会话主动**查库，再把纪律写进客户端的规则文件（在项目根目录运行，幂等可重复）：
+注册 MCP 后，支持 instructions 的客户端可获得按需记忆工作流。对于忽略 instructions 的客户端，或需要显式配置工作流时，可把纪律写进客户端规则文件（在项目根目录运行，幂等可重复）：
 
 ```bash
 agentbrain rules --agent claude --write   # 支持 claude / codex / trae / cursor / agentsmd（项目级）
@@ -146,7 +146,7 @@ agentbrain rules --agent agentsmd --write  # agents.md 开放标准：OpenCode�
 agentbrain rules --agent claude --write --global  # 用户级全局（~/.claude/CLAUDE.md），一次配置所有项目生效
 ```
 
-一条命令把「任务开始查库、中途遇到新问题再查、学到就自主入库（无需确认）、密钥不入库」写进 `CLAUDE.md` / `AGENTS.md` / `.trae/rules/` / `.cursor/rules/`。TRAE 和 Cursor 的全局规则在各自设置界面里，不走文件；claude / codex 支持 `--global`。
+该命令写入「任务前检索并选读、同主题复用、遇到未覆盖问题再查、经验证且授权后查重入库、密钥不入库」到 `CLAUDE.md` / `AGENTS.md` / `.trae/rules/` / `.cursor/rules/`。TRAE 和 Cursor 的全局规则在各自设置界面里，不走文件；claude / codex 支持 `--global`。
 
 Onboarding a **new** agent later needs no instructions from you: just tell it
 "read `AGENTS.md`" — the file routes first-timers to `ONBOARDING.md`, where they
@@ -192,9 +192,10 @@ command = "agentbrain"
 args = ["serve"]
 ```
 
-Registering MCP makes the tools *available*; making the client *actually query*
-at task start takes one more line — write the discipline block into the
-project's rule file (run in the project root, idempotent):
+Registering MCP also supplies server instructions to supporting clients.
+Clients may ignore them; server configuration cannot guarantee tool calls.
+For explicit client guidance, write the discipline block into the project's
+rule file (run in the project root, idempotent):
 
 ```bash
 agentbrain rules --agent codex --write           # per-project AGENTS.md
@@ -208,9 +209,11 @@ agentbrain install --agent codex --global
 ```
 
 It installs a short "agentbrain memory discipline" section into `CLAUDE.md`,
-`AGENTS.md`, `.trae/rules/` or `.cursor/rules/`: query at task start, re-query
-on new subtasks/errors, ingest autonomously when something is learned, no
-secrets ever. The `agentsmd` target writes the agents.md open standard file,
+`AGENTS.md`, `.trae/rules/` or `.cursor/rules/`: query and selectively read before
+work, check applicability, reuse previously read lessons, and re-query for
+uncovered subtasks/errors. Ingest only verified, reusable findings after
+duplicate checks and under host authorization rules; never store secrets.
+The `agentsmd` target writes the agents.md open standard file,
 followed by OpenCode, Gemini CLI, Amp and other standard-compliant tools.
 TRAE and Cursor keep their global rules in their settings UIs;
 claude and codex support `--global`.
@@ -220,8 +223,8 @@ claude and codex support `--global`.
 | Tool | Purpose |
 |------|---------|
 | `memory_query(query, top_k=5, mode="index", tag=None)` | Search lessons. `mode='index'` returns compact hits (id, summary, tags, path, gist); `mode='full'` adds full text; `tag` narrows results to one tag. |
-| `memory_read(lesson_ids)` | Read selected lessons in full and increment actual-use counters. |
-| `memory_stats()` | Show active, retired, read, unread and most-read lesson counts. |
+| `memory_read(lesson_ids)` | Read up to 10 unique IDs and record full-text reads. Superseded IDs point to replacements; expired lessons are historical context and do not increase counts. |
+| `memory_stats()` | Show active (not superseded, including expired), retired, read, unread and most-read lesson counts. Counts measure reads, not adoption or task success. |
 | `memory_ingest(case_id, lesson, tags, confidence=0.8, source_summary=None)` | Save a new lesson (facts + scenario + fix, ≤ 30 lines). Creates a file, updates Index.md and log.md. |
 | `memory_lint(scope="all")` | Health check: duplicates, stale, expired, untagged, low-confidence. Writes a merge proposal to `_consolidations/`. |
 | `memory_distill(window_days=30, min_repeat=3)` | Finds cases/tags ingested ≥ N times in the window and writes a promotion proposal. |
@@ -236,9 +239,10 @@ claude and codex support `--global`.
 | `agentbrain://index` | `Case-Learnings/Index.md` — retrieval layer 1 |
 | `agentbrain://profile` | merged owner profile (read-only) |
 
-Agents are expected to follow `AGENTS.md` in the vault root: read the profile at
-session start, query at task start, ingest on learnings, never edit existing
-lessons, never write secrets into the vault. Consolidation proposals carry
+Agents are expected to follow `AGENTS.md` in the vault root: read the profile once
+for substantive work, query and selectively read before applying lessons, and
+save verified findings after duplicate checks and under host authorization.
+Never edit existing lessons or write secrets into the vault. Consolidation proposals carry
 machine-readable directive blocks (```` ```agentbrain ````); only the owner
 executes them via `agentbrain apply`.
 
@@ -247,8 +251,10 @@ executes them via `agentbrain apply`.
 - **Retrieval scoring**: BM25 over summary (×3), tags (×2), case id and body, with a
   CJK bigram tokenizer so Chinese queries work out of the box; results are boosted by
   `verified`, `use_count` and recent `last_verified_at`, demoted when stale (> 1 year).
-- **Self-maintenance signals**: every query hit increments `use_count`; `log.md`
-  feeds `memory_distill` pattern analysis; `lint` refreshes nothing silently —
+- **Self-maintenance signals**: compact query hits do not increment `use_count`.
+  Explicit `memory_read` and full-mode queries count non-expired, non-superseded
+  reads once per ID per call; counts do not measure adoption or task success.
+  `log.md` feeds `memory_distill` pattern analysis; `lint` refreshes nothing silently —
   every mutation of history goes through human-approved proposals.
 - **Single-user, local-first**: no daemon, no ports; concurrent writes from several
   agents are serialized by an OS-level byte-range lock (`.vault.lock`, msvcrt/fcntl —
@@ -259,7 +265,8 @@ executes them via `agentbrain apply`.
   proposal, suggestion, index rebuild — is auto-committed, so any bad edit can be
   rolled back with plain git. Query-driven `use_count` bumps ride along with the
   next content commit instead of polluting history. Works fully without git; if git
-  is missing, snapshots are silently disabled.
+  is missing, snapshots are silently disabled. Individual file replacements are
+  atomic; a disk failure can still interrupt a multi-file operation.
 
 ## Changelog
 

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 from . import __version__, api, scaffold
-from .config import Config
+from .config import Config, ENV_VAR
 from .vault import Vault, VaultNotInitialized
 
 
@@ -187,14 +188,19 @@ def main(argv: list[str] | None = None) -> int:
 
         try:
             v = Vault.open(Config.load(args.vault))
-        except VaultNotInitialized:
-            print(doctor())
+        except VaultNotInitialized as e:
+            print(str(e), file=sys.stderr)
             return 2
         out = doctor(v)
         print(out)
         return 1 if "issue(s) found" in out else 0
     if args.cmd == "upgrade":
         cfg = Config.load(args.vault)
+        try:
+            Vault.open(cfg)
+        except VaultNotInitialized as e:
+            print(str(e), file=sys.stderr)
+            return 2
         print(scaffold.upgrade(Path(cfg.vault_dir)))
         return 0
     if args.cmd == "snapshot":
@@ -220,9 +226,19 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
         return 0
     if args.cmd == "serve":
-        from . import mcp_server
+        previous_vault = os.environ.get(ENV_VAR)
+        if args.vault is not None:
+            os.environ[ENV_VAR] = str(Config.load(args.vault).vault_dir)
+        try:
+            from . import mcp_server
 
-        mcp_server.main()
+            mcp_server.main()
+        finally:
+            if args.vault is not None:
+                if previous_vault is None:
+                    os.environ.pop(ENV_VAR, None)
+                else:
+                    os.environ[ENV_VAR] = previous_vault
         return 0
 
     try:
@@ -260,7 +276,11 @@ def main(argv: list[str] | None = None) -> int:
         vault.rebuild_index()
         print(f"Index rebuilt: {vault.relpath(vault.index_md)}")
     elif args.cmd == "verify":
-        verified, missing = vault.verify(args.ids)
+        try:
+            verified, missing = vault.verify(args.ids)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 2
         if verified:
             print(f"Verified {len(verified)} lesson(s): {', '.join(verified)}")
         if missing:

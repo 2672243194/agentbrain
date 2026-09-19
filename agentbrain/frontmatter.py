@@ -21,10 +21,29 @@ class Document:
     fields: tuple = ()
 
     def with_integer(self, key: str, value: int) -> str | None:
-        """Patch one top-level counter without reserializing human Markdown.
+        """Patch a counter, retaining its existing numeric quote style."""
+        return self._with_scalar(key, str(value), keep_quotes=True)
 
-        Unsafe compound/anchored counters are left alone: an optional usage
-        statistic must never alter another field through a YAML alias.
+    def with_scalar(self, key: str, value: str | int | bool) -> str | None:
+        """Patch one scalar field while retaining unrelated Markdown."""
+        style = "'" if isinstance(value, str) else None
+        if isinstance(value, str):
+            for key_node, value_node in self.fields:
+                if (
+                    key_node.value == key and isinstance(value_node, yaml.ScalarNode)
+                    and value_node.style in ("'", '"')
+                ):
+                    style = value_node.style
+        replacement = yaml.safe_dump(
+            value, allow_unicode=True, default_flow_style=True, default_style=style,
+        ).removesuffix("...\n").rstrip("\n")
+        return self._with_scalar(key, replacement)
+
+    def _with_scalar(self, key: str, replacement: str, *, keep_quotes: bool = False) -> str | None:
+        """Patch a top-level scalar using its original YAML source marks.
+
+        Compound and anchored values remain unchanged so a field update cannot
+        alter other metadata through a YAML alias.
         """
         if self.match is None or self.node is None:
             return None
@@ -53,8 +72,7 @@ class Document:
             fragment = header[start:end]
             if any(isinstance(t, yaml.tokens.AnchorToken) for t in yaml.scan(fragment)):
                 return None
-            replacement = str(value)
-            if fragment.startswith(("'", '"')):
+            if keep_quotes and fragment.startswith(("'", '"')):
                 replacement = fragment[0] + replacement + fragment[0]
             if not fragment and start and header[start - 1] == ":":
                 replacement = " " + replacement
@@ -73,12 +91,12 @@ class Document:
             comma = self.fields and not isinstance(
                 tokens[closing - 1], yaml.tokens.FlowEntryToken
             )
-            replacement = (", " if comma else " ") + f"{key}: {value}"
+            replacement = (", " if comma else " ") + f"{key}: {replacement}"
         else:
             start = end = self.node.end_mark.index
             newline = "\r\n" if "\r\n" in header else "\n"
             indent = " " * self.node.start_mark.column
-            replacement = f"{indent}{key}: {value}{newline}"
+            replacement = f"{indent}{key}: {replacement}{newline}"
         return self.text[:offset + start] + replacement + self.text[offset + end:]
 
 
