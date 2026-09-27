@@ -43,7 +43,7 @@ def _normalize_tags(tags) -> tuple[list[str], list[str]]:
     out: list[str] = []
     dropped: list[str] = []
     for t in tags:
-        t = str(t).strip().strip("#")
+        t = " ".join(str(t).split()).strip("#").strip()
         if not t or t in out:
             continue
         if len(out) >= 8:
@@ -182,22 +182,34 @@ def memory_read(
     vault: Vault | None = None,
 ) -> str:
     """Read selected lessons in full and record actual use."""
+    return _memory_read_result(lesson_ids, vault)[0]
+
+
+def _memory_read_result(
+    lesson_ids: list[str] | str,
+    vault: Vault | None = None,
+) -> tuple[str, int]:
+    """Return read output and status without reading or counting twice.
+
+    Status is 0 for complete success, 1 for partial success, and 2 for a
+    refused request, an unavailable vault, or no lessons found.
+    """
     try:
         v = _open_vault(vault)
     except VaultNotInitialized as e:
-        return str(e)
+        return str(e), 2
 
     if isinstance(lesson_ids, str):
         lesson_ids = [lesson_ids]
-    ids = list(dict.fromkeys(str(i).strip() for i in lesson_ids if str(i).strip()))
+    ids = v._unique_lesson_ids([str(i).strip() for i in lesson_ids if str(i).strip()])
     if not ids:
-        return "Refused: no lesson ids supplied."
+        return "Refused: no lesson ids supplied.", 2
     if len(ids) > 10:
-        return "Refused: at most 10 unique lesson ids per read; split the request into batches."
+        return "Refused: at most 10 unique lesson ids per read; split the request into batches.", 2
 
     found = v.read_and_bump(ids)
-    found_ids = {lesson.lesson_id for lesson in found}
-    missing = [lesson_id for lesson_id in ids if lesson_id not in found_ids]
+    found_paths = {v._lesson_path(lesson.lesson_id) for lesson in found}
+    missing = [lesson_id for lesson_id in ids if v._lesson_path(lesson_id) not in found_paths]
     lines: list[str] = []
     for lesson in found:
         if lesson.superseded_by:
@@ -206,7 +218,7 @@ def memory_read(
         lines.extend(_full_lesson(lesson, v, f"## [{lesson.lesson_id}]"))
     if missing:
         lines.append(f"Not found: {', '.join(missing)}")
-    return "\n".join(lines).rstrip()
+    return "\n".join(lines).rstrip(), (2 if not found else 1 if missing else 0)
 
 
 def memory_stats(vault: Vault | None = None) -> str:
@@ -236,6 +248,7 @@ def memory_stats(vault: Vault | None = None) -> str:
     )
     if not used:
         lines.append("  - none")
+    lines.append("Counters are cumulative; they do not establish recent use or adoption.")
     return "\n".join(lines)
 
 
@@ -445,8 +458,12 @@ def memory_distill(
     except VaultNotInitialized as e:
         return str(e)
 
-    cutoff = (dt.date.today() - dt.timedelta(days=window_days)).isoformat()
-    entries = [e for e in v.log_entries() if e["date"] >= cutoff and e["action"] == "ingest"]
+    today = dt.date.today()
+    cutoff = (today - dt.timedelta(days=window_days)).isoformat()
+    entries = [
+        e for e in v.log_entries()
+        if cutoff <= e["date"] <= today.isoformat() and e["action"] == "ingest"
+    ]
 
     case_counts: Counter[str] = Counter()
     tag_counts: Counter[str] = Counter()

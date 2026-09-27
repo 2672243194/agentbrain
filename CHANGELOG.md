@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.2 — 2026-09-28
+
+- Require complete credential placeholders and recognize quoted assignment keys, including JSON input.
+- Stop failed Git staging from committing an incomplete snapshot and reporting success.
+- Deduplicate Windows read aliases by filesystem path semantics and allow safe filenames containing consecutive dots.
+- Keep tags on one line, encode log delimiters without losing field values, and exclude future entries from distillation windows.
+- Report rejected and partially completed CLI operations with nonzero exit codes while retaining plain-text MCP output.
+- Clarify that cumulative usage counters do not establish recent use, adoption or time/token savings.
+
 ## 0.6.1 — 2026-09-19
 
 - Keep lesson IDs readable after ingest and prevent case-variant IDs from overwriting lessons on Windows.

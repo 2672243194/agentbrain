@@ -20,7 +20,8 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("Private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
     ("Generic key=value assignment", re.compile(
         r"\b(?:password|passwd|pwd|api[_-]?key|apikey|secret|token|access[_-]?key)"
-        r"\s*[=:]\s*['\"]?[^\s'\"]{8,}",
+        r"['\"]?\s*[=:]\s*(?P<value>"
+        r"\"(?:\\.|[^\"\\\r\n]){8,}\"|'(?:\\.|[^'\\\r\n]){8,}'|[^\s'\"]{8,})",
         re.IGNORECASE,
     )),
 ]
@@ -29,7 +30,8 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 _PLACEHOLDERS = [
     re.compile(r"\$\{ENV:[A-Z0-9_]+\}"),
     re.compile(r"\$\{env:[A-Za-z0-9_]+\}"),
-    re.compile(r"\b(?:sk-xxx+|your[_-]?(?:api[_-]?)?key|xxx+|placeholder|changeme|redacted|<[^>]+>)\b", re.IGNORECASE),
+    re.compile(r"\b(?:sk-xxx+|your[_-]?(?:api[_-]?)?key|xxx+|placeholder|changeme|redacted)\b", re.IGNORECASE),
+    re.compile(r"<(?:your[_-]?)?(?:api[_-]?key|key|token|password|secret|placeholder|redacted)>", re.IGNORECASE),
     re.compile(r"\b[A-Za-z0-9][A-Za-z0-9-]*-lesson-\d{1,4}\b"),
 ]
 
@@ -57,8 +59,19 @@ def scan(text: str) -> list[tuple[str, str]]:
             exempt_spans.append(m.span())
     for kind, rx in _PATTERNS:
         for m in rx.finditer(text):
-            s, e = m.span()
-            if any(s < we and ws < e for ws, we in exempt_spans):
+            # An assignment includes its key and separator; only its complete
+            # value may be a placeholder. Partial overlaps such as
+            # ${ENV:KEY}secret or sk-xxx-secret must not hide a credential.
+            s, e = m.span("value") if "value" in m.re.groupindex else m.span()
+            if "value" in m.re.groupindex:
+                if text[s] in "'\"":
+                    s, e = s + 1, e - 1
+                else:
+                    # Only trailing prose punctuation may follow a complete
+                    # placeholder; punctuation inside a value is not a boundary.
+                    while e > s and text[e - 1] in ",;":
+                        e -= 1
+            if any(ws <= s and e <= we for ws, we in exempt_spans):
                 continue
             if kind == _AWS_SECRET_KIND and _HEX_RUN.fullmatch(m.group(0)):
                 continue

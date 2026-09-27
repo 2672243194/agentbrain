@@ -5,6 +5,7 @@ import math
 import re
 from pathlib import Path, PureWindowsPath
 from typing import Iterator
+from urllib.parse import quote, unquote
 
 from .config import Config
 from .frontmatter import Document, dump, parse_document
@@ -16,6 +17,8 @@ from .snapshot import Snapshot
 _DATE = "%Y-%m-%d"
 _LOG_RE = re.compile(r"^## \[(\d{4}-\d{2}-\d{2})\] (.+)$")
 _UNSAFE_FILENAME = re.compile(r'[\\/:*?"<>|\x00-\x1f\x7f]')
+_LOG_RESERVED = re.compile(r"[,|\r\n\v\f\x1c-\x1e\x85\u2028\u2029]")
+_LOG_ENCODING = "encoding:percent-v1"
 
 
 class VaultNotInitialized(RuntimeError):
@@ -181,9 +184,19 @@ class Vault:
 
     def _lesson_path(self, lesson_id: str) -> Path | None:
         filename = f"{lesson_id}.md"
-        if not lesson_id or ".." in lesson_id or not _safe_filename(filename):
+        if not lesson_id or lesson_id in (".", "..") or not _safe_filename(filename):
             return None
         return self.learnings_dir / filename
+
+    def _unique_lesson_ids(self, lesson_ids: list[str]) -> list[str]:
+        """Keep the first ID for each path using the host's case semantics."""
+        unique: dict[Path | str, str] = {}
+        for lesson_id in lesson_ids:
+            key = self._lesson_path(lesson_id)
+            # Invalid IDs still appear in the missing list without conflating
+            # them with a valid filename or other invalid IDs.
+            unique.setdefault(key if key is not None else lesson_id, lesson_id)
+        return list(unique.values())
 
     def save(self, lesson: Lesson, action: str | None = None) -> None:
         with self.locked():
@@ -284,7 +297,7 @@ class Vault:
             return []
         found: list[Lesson] = []
         with self.locked():
-            for lesson_id in dict.fromkeys(lesson_ids):
+            for lesson_id in self._unique_lesson_ids(lesson_ids):
                 path = self._lesson_path(lesson_id)
                 document = self._read_document(path) if path is not None else None
                 lesson = self._lesson_from_document(path, document) if document else None
@@ -362,10 +375,19 @@ class Vault:
 
     def _append_log_locked(self, action: str, obj: str, tags: list[str] | None = None) -> None:
         today = dt.date.today().strftime(_DATE)
+        tags = list(tags or [])
+        # Keep ordinary Markdown log lines readable. Encode delimiter-bearing
+        # fields reversibly, marking the line so legacy literal % escapes stay
+        # untouched when it is read back.
+        encoded = any(_LOG_RESERVED.search(value) for value in [action, obj, *tags])
+        if encoded:
+            action, obj = quote(action, safe=""), quote(obj, safe="")
+            tags = [quote(tag, safe="") for tag in tags]
         tag_s = f" | tags:{','.join(tags)}" if tags else ""
+        encoding_s = f" | {_LOG_ENCODING}" if encoded else ""
         self.log_md.parent.mkdir(parents=True, exist_ok=True)
         with self.log_md.open("a", encoding="utf-8") as f:
-            f.write(f"## [{today}] {action} | {obj}{tag_s}\n")
+            f.write(f"## [{today}] {action} | {obj}{tag_s}{encoding_s}\n")
 
     def log_entries(self) -> list[dict]:
         entries: list[dict] = []
@@ -377,14 +399,22 @@ class Vault:
                 continue
             date, rest = m.groups()
             parts = [p.strip() for p in rest.split("|")]
+            encoded = len(parts) >= 3 and parts[-1] == _LOG_ENCODING
+            if encoded:
+                parts.pop()
             tags: list[str] = []
             if len(parts) > 2 and parts[2].startswith("tags:"):
                 tags = [t for t in parts[2][5:].split(",") if t]
+            action = parts[0]
+            obj = parts[1] if len(parts) > 1 else ""
+            if encoded:
+                action, obj = unquote(action), unquote(obj)
+                tags = [unquote(tag) for tag in tags]
             entries.append(
                 {
                     "date": date,
-                    "action": parts[0],
-                    "object": parts[1] if len(parts) > 1 else "",
+                    "action": action,
+                    "object": obj,
                     "tags": tags,
                 }
             )

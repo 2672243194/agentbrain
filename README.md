@@ -231,6 +231,15 @@ claude and codex support `--global`.
 | `memory_profile()` | Returns the owner profile (hard rules + soft preferences). Read-only; agents call it once per session to tailor behavior. |
 | `memory_suggest(title, change)` | Proposes a profile change into `Agent-Profile/_suggestions/` for the owner to review — agents never edit the profile itself. |
 
+`memory_stats` reports cumulative counters, not recent activity or adoption.
+Read timestamps and task outcomes are not recorded. Read-count changes are saved
+with the next content snapshot, so a snapshot date is not the read date. Older
+Vaults may also include counts from index queries recorded by earlier versions.
+
+For scripted CLI use, rejected `query`, `ingest`, `suggest` and `read` requests
+exit with code 2. `read` returns 1 when only some requested IDs exist, and 0 when
+all IDs are handled. A successful query with no matches still returns 0.
+
 ## MCP resources
 
 | URI | Content |

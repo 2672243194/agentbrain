@@ -54,7 +54,12 @@ class Snapshot:
         """Commit all vault changes: 'committed', 'clean', or 'failed: <reason>'."""
         if not self.enabled:
             return "failed: snapshots disabled (no .git in vault)"
-        self._git("add", "-A")
+        staged = self._git("add", "-A")
+        if staged is None:
+            return "failed: git unavailable while staging"
+        if staged.returncode != 0:
+            reason = [ln for ln in (staged.stderr or staged.stdout or "").splitlines() if ln.strip()]
+            return f"failed: git add: {reason[-1] if reason else 'unknown git error'}"
         r = self._git("commit", "-m", message)
         if r is None:
             return "failed: git unavailable"

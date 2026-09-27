@@ -105,6 +105,12 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _print_api_result(result: str) -> int:
+    """Preserve plain-text output and report rejected operations to scripts."""
+    print(result)
+    return 2 if result.startswith("Refused:") else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     if argv is None:  # real invocation; in-process calls (tests) keep their streams
         for stream in (sys.stdout, sys.stderr):
@@ -248,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.cmd == "query":
-        print(
+        return _print_api_result(
             api.memory_query(
                 query=args.query,
                 top_k=args.top_k,
@@ -258,12 +264,14 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
     elif args.cmd == "read":
-        print(api.memory_read(lesson_ids=args.ids, vault=vault))
+        result, status = api._memory_read_result(lesson_ids=args.ids, vault=vault)
+        print(result)
+        return status
     elif args.cmd == "stats":
         print(api.memory_stats(vault=vault))
     elif args.cmd == "ingest":
         tags = [t.strip() for t in args.tags.split(",") if t.strip()]
-        print(api.memory_ingest(case_id=args.case, lesson=args.lesson, tags=tags, confidence=args.confidence, source_summary=args.summary, vault=vault))
+        return _print_api_result(api.memory_ingest(case_id=args.case, lesson=args.lesson, tags=tags, confidence=args.confidence, source_summary=args.summary, vault=vault))
     elif args.cmd == "lint":
         out = api.memory_lint(scope=args.scope, vault=vault)
         print(out)
@@ -271,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         return 0 if out.startswith(("Lint clean", "No lessons in scope")) else 1
     elif args.cmd == "distill":
-        print(api.memory_distill(window_days=args.window_days, min_repeat=args.min_repeat, vault=vault))
+        return _print_api_result(api.memory_distill(window_days=args.window_days, min_repeat=args.min_repeat, vault=vault))
     elif args.cmd == "index":
         vault.rebuild_index()
         print(f"Index rebuilt: {vault.relpath(vault.index_md)}")
@@ -289,7 +297,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "profile":
         print(api.memory_profile(vault=vault))
     elif args.cmd == "suggest":
-        print(api.memory_suggest(title=args.title, change=args.change, vault=vault))
+        return _print_api_result(api.memory_suggest(title=args.title, change=args.change, vault=vault))
     elif args.cmd == "apply":
         from .apply import ProposalError, apply_proposal
 
