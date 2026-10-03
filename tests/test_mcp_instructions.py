@@ -189,6 +189,13 @@ def test_sdk_import_branches_use_explicit_instructions_support(monkeypatch, caps
     modern_module = "mcp.server.mcpserver"
     legacy_module = "mcp.server.fastmcp"
     fake = types.ModuleType(modern_module if branch == "mcpserver" else legacy_module)
+    errors = types.ModuleType(f"{fake.__name__}.exceptions")
+
+    class ToolErrorStub(Exception):
+        pass
+
+    errors.ToolError = ToolErrorStub
+    monkeypatch.setitem(sys.modules, errors.__name__, errors)
     if branch == "mcpserver":
         fake.MCPServer = InstructionsServerStub
         monkeypatch.setitem(sys.modules, modern_module, fake)
@@ -206,6 +213,9 @@ def test_sdk_import_branches_use_explicit_instructions_support(monkeypatch, caps
     else:
         assert module.mcp.instructions == mcp_server.SERVER_INSTRUCTIONS
     assert module.mcp.name == "agentbrain"
+    assert module.ToolError is ToolErrorStub
+    with pytest.raises(ToolErrorStub, match="Refused: test rejection"):
+        module._checked_result("Refused: test rejection")
     assert {tool.__name__ for tool in module.mcp.tools} == EXPECTED_INPUTS.keys()
     captured = capsys.readouterr()
     assert captured.out == ""

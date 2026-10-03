@@ -4,6 +4,7 @@
 
 - Generate desktop MCP launch hints with the current Python executable's absolute path and preserve the caller's isolation mode, including user-site installations.
 - Mark refused operations, unavailable Vaults and completely missing reads as MCP tool errors so desktop clients can distinguish failure from success; preserve partial reads and plain-text responses.
+- Use the SDK's explicit tool-error type to retain actionable refusal messages with MCP 2.3 while preserving masking for unexpected failures.
 - Document the verified DSH desktop profile format, separate desktop and CLI configuration, and explain connection checks and client-dependent memory guidance.
 
 ## 0.6.2 — 2026-09-28

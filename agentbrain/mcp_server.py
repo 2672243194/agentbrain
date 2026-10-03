@@ -5,8 +5,10 @@ import sys
 
 try:  # mcp >= 2.0
     from mcp.server.mcpserver import MCPServer as _Server
+    from mcp.server.mcpserver.exceptions import ToolError
 except ImportError:  # mcp 1.x
     from mcp.server.fastmcp import FastMCP as _Server
+    from mcp.server.fastmcp.exceptions import ToolError
 
 from . import api
 from .config import Config
@@ -30,7 +32,7 @@ else:
 def _checked_result(result: str) -> str:
     """Expose API refusals as MCP execution errors while keeping text output."""
     if result.startswith(("Refused:", "Invalid scope —", "agentbrain vault not found at '")):
-        raise ValueError(result)
+        raise ToolError(result)
     return result
 
 
@@ -51,7 +53,7 @@ def memory_read(lesson_ids: list[str]) -> str:
     content is labelled and does not increase usage."""
     result, status = api._memory_read_result(lesson_ids=lesson_ids)
     if status == 2:
-        raise ValueError(result)
+        raise ToolError(result)
     return result
 
 
