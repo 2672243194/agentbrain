@@ -23,11 +23,11 @@ agentbrain doctor             # 自检：一切正常会显示 "Everything looks
 }
 ```
 
-`AGENTBRAIN_VAULT` 可省略（默认 `~/agentbrain`）；vault 在别处时才需要写，路径按你的实际情况改。把上面 JSON 粘进任意 MCP 客户端（Claude Code / Codex / Cursor / DSH / Open WebUI…），重启客户端，完成。Agent 从此有了跨会话、跨工具的长期记忆。
+`AGENTBRAIN_VAULT` 可省略（默认 `~/agentbrain`）；vault 在别处时才需要写，路径按你的实际情况改。将 `command`、`args`、`env` 填入客户端的 MCP 配置入口；支持 `mcpServers` 导入的客户端可直接使用上面的 JSON。不同客户端的配置格式可能不同，DSH 桌面版请见下方专节。重启客户端后即可访问共享记忆库。
 
 以后接入**新的** agent 不用你教：对它说一句「读 `AGENTS.md` 照做」即可——文件开头会把新来者引导到 `ONBOARDING.md`，它自己就能判断接入状态（已接 MCP / 只有 shell / 只能读文件）并完成配置或降级。
 
-Paste that JSON (with your vault path) into any MCP client and restart it — done. Your agents now share one long-term memory.
+Use that JSON in clients accepting `mcpServers`, or enter its command, arguments and environment in your client's MCP settings. Restart the client to connect to the shared vault. See the DSH desktop section below for its profile format.
 
 [中文详细说明](#中文快速上手) · [English quickstart](#english-quickstart)
 
@@ -152,6 +152,31 @@ Onboarding a **new** agent later needs no instructions from you: just tell it
 "read `AGENTS.md`" — the file routes first-timers to `ONBOARDING.md`, where they
 detect their own access mode (MCP tools / shell / file-only) and wire themselves
 up or fall back accordingly.
+
+### DSH 桌面版 / DSH desktop
+
+以下配置按 DSH 桌面版 **0.2.0-rc.2** 的 MCP 插件核对。桌面版使用独立的 `desktop` profile，不能用全局 `dsh` CLI 的版本或配置代表桌面版，也不要把上面的 `mcpServers` JSON 直接写入 YAML 文件。
+
+在安装 agentbrain 的 Python 环境中运行 `agentbrain doctor`，获取当前解释器的绝对路径、参数和 Vault 路径。将对应字段合并到 `~/.dsh/profiles/desktop/cordis.patch.yml` 的顶层列表中；若已有 `id: mcp-agentbrain`，更新该条目即可，保留其他插件和用户配置。
+
+```yaml
+- insert:
+    - id: mcp-agentbrain
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: agentbrain
+        transport: stdio
+        command: 'C:\agentbrain-env\python.exe'
+        args: ['-I', '-m', 'agentbrain', 'serve']
+        env:
+          AGENTBRAIN_VAULT: 'C:\Users\<用户名>\agentbrain'
+```
+
+示例路径需要替换成实际安装位置。使用绝对解释器路径可避免桌面程序选中另一个 PATH 中的 Python。`doctor` 仅在自身以 `-I` 启动时保留隔离模式；如果使用 `pip install --user`，不要额外添加 `-I`，否则 Python 会忽略用户安装目录。
+
+完整退出并重新打开 DSH 桌面版后，新建会话并请求调用 `mcp__agentbrain__memory_stats` 验证连接，再用实际任务检查 `memory_profile` → `memory_query` → 相关 `memory_read` 的使用。工具列表可能在断线期间保留，仅看到工具名称不能证明连接正常。
+
+该版 DSH 会把服务器 instructions 加入系统提示，但是否主动调用仍取决于模型和会话规则。工具拒绝操作会以 MCP `isError` 标记失败；成功的无命中查询仍是正常结果，部分 ID 缺失的读取会保留已找到的正文并列出缺失项。
 
 ## English quickstart
 
@@ -310,8 +335,9 @@ executes them via `agentbrain apply`.
   rewrite the whole index. `agentbrain doctor` now reports broken lesson
   files (frontmatter present but unparseable) instead of letting them vanish
   silently, and lesson-id lookups reject path separators. `python -m
-  agentbrain serve` works as a PATH-free MCP fallback (the doctor snippet
-  shows both forms), lint findings carry explicit remedies, empty queries and
+  agentbrain serve` provides a module entry point; desktop clients should use
+  the installed interpreter's absolute path shown by `doctor`. Lint findings
+  carry explicit remedies, empty queries and
   unknown lint scopes are rejected with clear messages, tags past 8 are
   reported as dropped, oversize lessons (> 4000 chars) get a split hint, and
   nested locks across two vaults in one thread no longer deadlock.

@@ -27,6 +27,13 @@ else:
     )
 
 
+def _checked_result(result: str) -> str:
+    """Expose API refusals as MCP execution errors while keeping text output."""
+    if result.startswith(("Refused:", "Invalid scope —", "agentbrain vault not found at '")):
+        raise ValueError(result)
+    return result
+
+
 def memory_query(
     query: str, top_k: int = 5, mode: str = "index", tag: str | None = None
 ) -> str:
@@ -35,20 +42,23 @@ def memory_query(
     counts full text. top_k is clamped to 1-20; tag optionally filters results.
     Expired/superseded lessons are excluded. No match? Retry once with broader
     keywords or the other language."""
-    return api.memory_query(query=query, top_k=top_k, mode=mode, tag=tag)
+    return _checked_result(api.memory_query(query=query, top_k=top_k, mode=mode, tag=tag))
 
 
 def memory_read(lesson_ids: list[str]) -> str:
     """Read selected lessons in full; pass at most 10 unique ids. Active reads
     count once per id per call. Superseded ids point to replacements; expired
     content is labelled and does not increase usage."""
-    return api.memory_read(lesson_ids=lesson_ids)
+    result, status = api._memory_read_result(lesson_ids=lesson_ids)
+    if status == 2:
+        raise ValueError(result)
+    return result
 
 
 def memory_stats() -> str:
     """Return compact vault utilization statistics: active, retired, read,
     unread, total reads and the most-read lessons."""
-    return api.memory_stats()
+    return _checked_result(api.memory_stats())
 
 
 def memory_ingest(
@@ -63,32 +73,32 @@ def memory_ingest(
     source_summary <= 60 chars. Do not save guesses or conversation transcripts.
     Creates a new file only — never edits existing lessons; near-duplicates are
     flagged; credential-shaped content is refused automatically."""
-    return api.memory_ingest(
+    return _checked_result(api.memory_ingest(
         case_id=case_id,
         lesson=lesson,
         tags=tags,
         confidence=confidence,
         source_summary=source_summary,
-    )
+    ))
 
 
 def memory_lint(scope: str = "all") -> str:
     """Health-check the vault: duplicates, stale, expired, untagged and
     low-confidence lessons. Writes a merge proposal to _consolidations/
     that a human approves via `agentbrain apply`."""
-    return api.memory_lint(scope=scope)
+    return _checked_result(api.memory_lint(scope=scope))
 
 
 def memory_distill(window_days: int = 30, min_repeat: int = 3) -> str:
     """Find recurring patterns (cases/tags ingested >= min_repeat times within
     window_days) and write a promotion proposal to _consolidations/."""
-    return api.memory_distill(window_days=window_days, min_repeat=min_repeat)
+    return _checked_result(api.memory_distill(window_days=window_days, min_repeat=min_repeat))
 
 
 def memory_profile() -> str:
     """Read the owner's hard rules (Immutable) and soft preferences
     (Mutable-Hints). The profile is read-only; changes go through memory_suggest."""
-    return api.memory_profile()
+    return _checked_result(api.memory_profile())
 
 
 def memory_suggest(title: str, change: str) -> str:
@@ -96,7 +106,7 @@ def memory_suggest(title: str, change: str) -> str:
     preferences (Mutable-Hints). Propose a change you observed with a one-line
     rule wording; it lands in Agent-Profile/_suggestions/ for the owner to
     review. The profile itself is never modified by agents."""
-    return api.memory_suggest(title=title, change=change)
+    return _checked_result(api.memory_suggest(title=title, change=change))
 
 
 _text_options = {"structured_output": False} if "structured_output" in signature(mcp.add_tool).parameters else {}

@@ -1,8 +1,9 @@
-"""Regression tests for the v0.4.6 batch: python -m entry point, MCP hint
-fallback, and lint remedy hints."""
+"""Regression tests for the python -m entry point, MCP launch hint,
+and lint remedy hints."""
 from __future__ import annotations
 
 import datetime as dt
+import json
 import subprocess
 import sys
 
@@ -21,9 +22,12 @@ def test_python_m_entry_point_invokes_cli():
     assert r.stdout.startswith("agentbrain ")
 
 
-def test_doctor_mcp_hint_offers_python_m_fallback(vault: Vault):
+def test_doctor_mcp_hint_uses_installed_python(vault: Vault):
     out = doctor(vault)
-    assert '"args": ["-m", "agentbrain", "serve"]' in out
+    config = json.loads(out.split("```json\n", 1)[1].split("\n```", 1)[0])
+    server = config["mcpServers"]["agentbrain"]
+    assert server["command"] == sys.executable
+    assert server["args"] == (["-I"] if sys.flags.isolated else []) + ["-m", "agentbrain", "serve"]
 
 
 def test_lint_findings_carry_remedy_hints(vault: Vault):

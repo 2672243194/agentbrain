@@ -7,6 +7,7 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 
 from agentbrain.api import memory_ingest, memory_suggest
 from agentbrain.apply import apply_proposal
@@ -117,7 +118,8 @@ def test_doctor_healthy_report(vault: Vault):
     assert "lock: acquire/release ok" in out
     assert "snapshot: enabled" in out
     assert "Everything looks healthy." in out
-    assert '"command": "agentbrain"' in out  # MCP snippet present
+    config = json.loads(out.split("```json\n", 1)[1].split("\n```", 1)[0])
+    assert config["mcpServers"]["agentbrain"]["command"] == sys.executable
     m = re.search(r'"AGENTBRAIN_VAULT": (".*")\s*}', out)
     assert m and json.loads(m.group(1)) == str(vault.root)  # valid, escaped JSON
 

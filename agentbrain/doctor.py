@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 from . import __version__
@@ -11,23 +12,26 @@ from .vault import Vault, VaultNotInitialized
 
 
 def _mcp_hint(vault_root: str) -> list[str]:
-    env_value = json.dumps(vault_root)  # escaped backslashes on Windows
+    args = ["-m", "agentbrain", "serve"]
+    if sys.flags.isolated:
+        args.insert(0, "-I")
+    configuration = {
+        "mcpServers": {
+            "agentbrain": {
+                "command": os.path.abspath(sys.executable),
+                "args": args,
+                "env": {"AGENTBRAIN_VAULT": vault_root},
+            }
+        }
+    }
     return [
         "",
-        "Paste this into any MCP client (Claude Code / Codex / Cursor / DSH):",
+        "MCP JSON configuration (adapt the outer structure to your client):",
         "```json",
-        "{",
-        '  "mcpServers": {',
-        '    "agentbrain": {',
-        '      "command": "agentbrain",',
-        '      "args": ["serve"],',
-        f'      "env": {{ "AGENTBRAIN_VAULT": {env_value} }}',
-        "    }",
-        "  }",
-        "}",
+        json.dumps(configuration, ensure_ascii=False, indent=2),
         "```",
-        "If the client cannot resolve 'agentbrain' from PATH, use:",
-'  "command": "python", "args": ["-m", "agentbrain", "serve"]',
+        "This uses the current Python executable without a PATH lookup. "
+        "Isolated mode (-I) is kept only when enabled for this doctor run.",
     ]
 
 
