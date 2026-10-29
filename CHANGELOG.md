@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0 — 2026-10-29
+
+- Add batched, version-bound `memory_feedback` reports in separate Markdown files, with task-level deduplication, conflict refusal and credential checks; preserve lesson content, read counters and ranking.
+- Include stable content versions in full reads and separate reported outcome totals in `memory_stats`; feedback is not independent verification.
+- Guide clients to report evidence after task results, preserving legacy rule/template migration and owner customizations.
+
 ## 0.6.3 — 2026-10-03
 
 - Generate desktop MCP launch hints with the current Python executable's absolute path and preserve the caller's isolation mode, including user-site installations.

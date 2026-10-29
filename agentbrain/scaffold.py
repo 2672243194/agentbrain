@@ -26,6 +26,7 @@ _LEGACY = {
         "legacy/AGENTS-0.4.3.md",
         "legacy/AGENTS-0.4.6.md",
         "legacy/AGENTS-0.6.0.md",
+        "legacy/AGENTS-0.6.3.md",
     ),
     "ONBOARDING.md": (),
 }

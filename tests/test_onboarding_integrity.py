@@ -115,9 +115,10 @@ def test_vault_template_shares_safe_selective_session_guidance():
         assert obsolete_rule not in template
 
 
-def test_previous_vault_template_upgrade_is_idempotent(vault, monkeypatch):
+@pytest.mark.parametrize("previous", ["AGENTS-0.6.0.md", "AGENTS-0.6.3.md"])
+def test_previous_vault_template_upgrade_is_idempotent(vault, monkeypatch, previous):
     agents = vault.root / "AGENTS.md"
-    old_template = scaffold._tpl("legacy/AGENTS-0.6.0.md")
+    old_template = scaffold._tpl("legacy/" + previous)
     agents.write_text(old_template, encoding="utf-8")
     protected = {
         path: path.read_bytes()
@@ -136,9 +137,10 @@ def test_previous_vault_template_upgrade_is_idempotent(vault, monkeypatch):
     assert len(snapshots) == 1
 
 
-def test_previous_vault_template_with_owner_customization_is_preserved(vault):
+@pytest.mark.parametrize("previous", ["AGENTS-0.6.0.md", "AGENTS-0.6.3.md"])
+def test_previous_vault_template_with_owner_customization_is_preserved(vault, previous):
     agents = vault.root / "AGENTS.md"
-    customized = scaffold._tpl("legacy/AGENTS-0.6.0.md") + "\n## Owner additions\n\nAlways retain this.\n"
+    customized = scaffold._tpl("legacy/" + previous) + "\n## Owner additions\n\nAlways retain this.\n"
     agents.write_text(customized, encoding="utf-8")
     before = agents.read_bytes()
     assert scaffold.template_status(vault.root)["AGENTS.md"] == "custom"

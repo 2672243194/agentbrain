@@ -10,6 +10,7 @@ def test_mcp_tools_registered():
         "memory_query",
         "memory_read",
         "memory_stats",
+        "memory_feedback",
         "memory_ingest",
         "memory_lint",
         "memory_distill",

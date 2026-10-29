@@ -63,7 +63,8 @@ agentbrain/                    # vault root (git-friendly, Obsidian-friendly)
 │  ├─ log.md                     # append-only audit log
 │  ├─ Learnings/                 # one lesson per file, YAML frontmatter
 │  │  └─ case-001-lesson-01.md   # 文件名 = {case_id}-lesson-{NN}，自动生成
-│  └─ _consolidations/           # merge/promotion proposals (human approval)
+│  ├─ _consolidations/           # merge/promotion proposals (human approval)
+│  └─ _feedback/                # reported outcomes, created on first feedback
 └─ Agent-Profile/
    ├─ Immutable/                 # owner preferences & environment (agent read-only)
    ├─ Mutable-Hints/             # soft preferences (agent read-only)
@@ -112,7 +113,7 @@ agentbrain rules --agent trae --write # 刷新各项目规则文件里的纪律�
 | 记忆整理（清重复/过时） | `agentbrain lint` → 审核 → `agentbrain apply <提案>` | 约一周一次 |
 | 手改文件后备份 | `agentbrain snapshot` | 改完就跑 |
 
-支持服务器 instructions 的客户端会获得默认引导：首次实质任务读偏好，任务前检索并选读相关经验，核对适用条件后使用；新经验须经过验证、查重并符合宿主授权规则后入库。客户端是否实际调用工具取决于其实现和规则，服务端不能保证自动执行。
+支持服务器 instructions 的客户端会获得默认引导：首次实质任务读偏好，任务前检索并选读相关经验，核对适用条件后使用；任务或子任务有结果后按需批量反馈；新经验须经过验证、查重并符合宿主授权规则后入库。客户端是否实际调用工具取决于其实现和规则，服务端不能保证自动执行。
 
 在 MCP 客户端里接入（以 Claude Code 为例）：
 
@@ -146,7 +147,7 @@ agentbrain rules --agent agentsmd --write  # agents.md 开放标准：OpenCode�
 agentbrain rules --agent claude --write --global  # 用户级全局（~/.claude/CLAUDE.md），一次配置所有项目生效
 ```
 
-该命令写入「任务前检索并选读、同主题复用、遇到未覆盖问题再查、经验证且授权后查重入库、密钥不入库」到 `CLAUDE.md` / `AGENTS.md` / `.trae/rules/` / `.cursor/rules/`。TRAE 和 Cursor 的全局规则在各自设置界面里，不走文件；claude / codex 支持 `--global`。
+该命令写入「任务前检索并选读、同主题复用、遇到未覆盖问题再查、有结果后批量反馈、经验证且授权后查重入库、密钥不入库」到 `CLAUDE.md` / `AGENTS.md` / `.trae/rules/` / `.cursor/rules/`。TRAE 和 Cursor 的全局规则在各自设置界面里，不走文件；claude / codex 支持 `--global`。
 
 Onboarding a **new** agent later needs no instructions from you: just tell it
 "read `AGENTS.md`" — the file routes first-timers to `ONBOARDING.md`, where they
@@ -236,7 +237,8 @@ agentbrain install --agent codex --global
 It installs a short "agentbrain memory discipline" section into `CLAUDE.md`,
 `AGENTS.md`, `.trae/rules/` or `.cursor/rules/`: query and selectively read before
 work, check applicability, reuse previously read lessons, and re-query for
-uncovered subtasks/errors. Ingest only verified, reusable findings after
+uncovered subtasks/errors. Batch feedback after task/subtask evidence is available.
+Ingest only verified, reusable findings after
 duplicate checks and under host authorization rules; never store secrets.
 The `agentsmd` target writes the agents.md open standard file,
 followed by OpenCode, Gemini CLI, Amp and other standard-compliant tools.
@@ -248,22 +250,57 @@ claude and codex support `--global`.
 | Tool | Purpose |
 |------|---------|
 | `memory_query(query, top_k=5, mode="index", tag=None)` | Search lessons. `mode='index'` returns compact hits (id, summary, tags, path, gist); `mode='full'` adds full text; `tag` narrows results to one tag. |
-| `memory_read(lesson_ids)` | Read up to 10 unique IDs and record full-text reads. Superseded IDs point to replacements; expired lessons are historical context and do not increase counts. |
-| `memory_stats()` | Show active (not superseded, including expired), retired, read, unread and most-read lesson counts. Counts measure reads, not adoption or task success. |
+| `memory_read(lesson_ids)` | Read up to 10 unique IDs and record full-text reads. Includes a content version for later feedback. Superseded IDs point to replacements; expired lessons are historical context and do not increase counts. |
+| `memory_feedback(task_id, entries)` | Record up to 10 lesson outcomes with versions, environment and evidence. Same task/lesson/version retries are idempotent; conflicting reports are refused. |
+| `memory_stats()` | Show active (not superseded, including expired), retired, read, unread and most-read lesson counts, plus separately reported feedback outcomes. Reads do not establish adoption; feedback is reported evidence, not automatic verification. |
 | `memory_ingest(case_id, lesson, tags, confidence=0.8, source_summary=None)` | Save a new lesson (facts + scenario + fix, ≤ 30 lines). Creates a file, updates Index.md and log.md. |
 | `memory_lint(scope="all")` | Health check: duplicates, stale, expired, untagged, low-confidence. Writes a merge proposal to `_consolidations/`. |
 | `memory_distill(window_days=30, min_repeat=3)` | Finds cases/tags ingested ≥ N times in the window and writes a promotion proposal. |
 | `memory_profile()` | Returns the owner profile (hard rules + soft preferences). Read-only; agents call it once per session to tailor behavior. |
 | `memory_suggest(title, change)` | Proposes a profile change into `Agent-Profile/_suggestions/` for the owner to review — agents never edit the profile itself. |
 
-`memory_stats` reports cumulative counters, not recent activity or adoption.
-Read timestamps and task outcomes are not recorded. Read-count changes are saved
+`memory_stats` reports cumulative read counters and separate feedback totals, not
+complete recent activity or automatically verified task success. Read timestamps
+are not recorded; task outcomes exist only when explicitly reported through
+`memory_feedback`. Read-count changes are saved
 with the next content snapshot, so a snapshot date is not the read date. Older
 Vaults may also include counts from index queries recorded by earlier versions.
 
 For scripted CLI use, rejected `query`, `ingest`, `suggest` and `read` requests
 exit with code 2. `read` returns 1 when only some requested IDs exist, and 0 when
 all IDs are handled. A successful query with no matches still returns 0.
+
+### 经验效果反馈 / Outcome feedback
+
+在任务或子任务有可核对的结果后，遵守宿主授权规则，一次批量提交相关经验的反馈；不要每读一次就调用，也不要要求用户逐条打分。`use_count` 继续只表示读取次数。没有反馈不代表经验无用，整个任务成功也不能证明每条读过的经验都发挥了作用。
+
+`memory_feedback` 接受一个稳定且不包含敏感信息的 `task_id`，以及最多 10 条 `entries`。不同任务使用不同标识；同一任务的重试沿用原标识。每条包含：
+
+| 字段 | 含义 |
+|------|------|
+| `lesson_id` | 实际评估的经验 ID |
+| `lesson_version` | 从当时的 `memory_read` 或 `memory_query(mode="full")` 输出复制的内容版本；不能猜测或用新版本替代旧证据 |
+| `outcome` | 下表中的一种结果 |
+| `environment` | 简短说明实际环境、版本或适用条件 |
+| `evidence` | 一句话说明该条经验的具体作用或失败证据；结果不明时说明尚未验证的原因 |
+
+| `outcome` | 使用条件 |
+|-----------|----------|
+| `helpful` | 实际采用，并有证据说明它带来了帮助 |
+| `partial` | 部分步骤有帮助，还需要补充条件或措施 |
+| `ineffective` | 条件匹配且正确执行后仍无效，或发现了经验错误 |
+| `not_applicable` | 环境、版本或前提不匹配；不视为经验错误 |
+| `unverified` | 尚无足够证据判断效果；不计为好评或差评 |
+
+反馈单独保存为 `Case-Learnings/_feedback/*.md`，不修改原经验、Immutable、置信度或检索排序。相同任务、经验和内容版本的相同请求不会重复计数；冲突反馈会被拒绝，不覆盖历史。反馈受密钥检查和长度限制，不保存猜测、聊天流水账、未经测量的 token 节省量。通过 `memory_stats` / `agentbrain stats` 查看分类总数，或直接阅读反馈 Markdown 查看上下文。
+
+Feedback is a separate, version-bound report of observed contribution. Submit a
+batch when evidence is available, retain the task ID on retries, and distinguish
+failed advice from an inapplicable environment or an unverified result. Reports
+are not independent ground truth and do not automatically change lesson ranking,
+confidence or content. Feedback is available through MCP; there is no feedback
+CLI command. Older clients need a server restart to discover the new tool; actual
+use still depends on the client, model and host authorization rules.
 
 ## MCP resources
 
@@ -288,6 +325,8 @@ executes them via `agentbrain apply`.
 - **Self-maintenance signals**: compact query hits do not increment `use_count`.
   Explicit `memory_read` and full-mode queries count non-expired, non-superseded
   reads once per ID per call; counts do not measure adoption or task success.
+  Version-bound feedback records reported outcomes separately and does not alter
+  these counters or ranking. No feedback is not evidence of failure.
   `log.md` feeds `memory_distill` pattern analysis; `lint` refreshes nothing silently —
   every mutation of history goes through human-approved proposals.
 - **Single-user, local-first**: no daemon, no ports; concurrent writes from several

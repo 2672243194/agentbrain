@@ -12,6 +12,7 @@ except ImportError:  # mcp 1.x
 
 from . import api
 from .config import Config
+from .feedback import FeedbackEntry
 from .profile import Profile
 from .rules import SESSION_GUIDANCE
 from .vault import Vault, VaultNotInitialized
@@ -58,9 +59,20 @@ def memory_read(lesson_ids: list[str]) -> str:
 
 
 def memory_stats() -> str:
-    """Return compact vault utilization statistics: active, retired, read,
-    unread, total reads and the most-read lessons."""
+    """Return compact read counts and separate self-reported feedback totals
+    across all recorded versions. Missing reports do not mean ineffectiveness."""
     return _checked_result(api.memory_stats())
+
+
+def memory_feedback(task_id: str, entries: list[FeedbackEntry]) -> str:
+    """Report 1-10 lesson outcomes after checking results, under host authorization.
+    Reuse a stable task_id across retries; lesson_version comes from memory_read
+    or query(mode='full'). Each entry needs environment and one-sentence evidence
+    attributing its own contribution. Outcomes: helpful, partial, ineffective,
+    not_applicable, unverified. Identical task/lesson/version retries are skipped;
+    conflicting reports are refused. No secrets, transcripts or guessed savings.
+    Writes separate Markdown only; does not change lessons, preferences or rank."""
+    return _checked_result(api.memory_feedback(task_id=task_id, entries=entries))
 
 
 def memory_ingest(
@@ -113,7 +125,7 @@ def memory_suggest(title: str, change: str) -> str:
 
 _text_options = {"structured_output": False} if "structured_output" in signature(mcp.add_tool).parameters else {}
 for _tool in (
-    memory_query, memory_read, memory_stats, memory_ingest,
+    memory_query, memory_read, memory_stats, memory_feedback, memory_ingest,
     memory_lint, memory_distill, memory_profile, memory_suggest,
 ):
     mcp.add_tool(_tool, **_text_options)

@@ -157,6 +157,7 @@ class Vault:
             superseded_by=str(meta.get("superseded_by", "") or ""),
             use_count=max(0, _as_int(meta.get("use_count") or 0, 0)),
             path=path,
+            _source_meta=meta,
         )
 
     def broken_lessons(self) -> list[Path]:

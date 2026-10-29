@@ -6,6 +6,7 @@ from collections import Counter
 from pathlib import Path, PureWindowsPath
 
 from .config import Config
+from . import feedback
 from .locking import atomic_write
 from .models import Lesson
 from .profile import Profile
@@ -101,7 +102,9 @@ def _full_lesson(lesson: Lesson, vault: Vault, heading: str) -> list[str]:
     summary = oneline(lesson.source_summary, _SUMMARY_CHARS)
     if summary and summary not in " ".join(lesson.content.split()):
         heading += f" {summary}"
-    lines = [heading, f"tags: {', '.join(lesson.tags) or '-'} · path: {vault.relpath(lesson.path)}"]
+    version = lesson.version
+    lines = [heading, f"tags: {', '.join(lesson.tags) or '-'} · path: {vault.relpath(lesson.path)}",
+             f"version: {version}" if version else "Feedback version unavailable: review complex lesson metadata."]
     expired = _days_since(lesson.valid_until)
     if expired is not None and expired >= 0:
         lines.append(f"EXPIRED: valid_until {lesson.valid_until}; historical context only, revalidate before use.")
@@ -249,7 +252,24 @@ def memory_stats(vault: Vault | None = None) -> str:
     if not used:
         lines.append("  - none")
     lines.append("Counters are cumulative; they do not establish recent use or adoption.")
+    lines.extend(feedback.summary(v))
     return "\n".join(lines)
+
+
+def memory_feedback(
+    task_id: str,
+    entries: list[dict] | list[feedback.FeedbackEntry],
+    vault: Vault | None = None,
+) -> str:
+    """Record bounded, deduplicated outcome reports separately from lessons."""
+    try:
+        v = _open_vault(vault)
+    except VaultNotInitialized as e:
+        return str(e)
+    try:
+        return feedback.record(v, task_id, entries)
+    except ValueError as e:
+        return f"Refused: {e}"
 
 
 def memory_ingest(

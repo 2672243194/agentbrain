@@ -19,6 +19,7 @@ EXPECTED_INPUTS = {
     "memory_query": {"query", "top_k", "mode", "tag"},
     "memory_read": {"lesson_ids"},
     "memory_stats": set(),
+    "memory_feedback": {"task_id", "entries"},
     "memory_ingest": {"case_id", "lesson", "tags", "confidence", "source_summary"},
     "memory_lint": {"scope"},
     "memory_distill": {"window_days", "min_repeat"},
@@ -38,6 +39,7 @@ EXPECTED_INPUTS = {
         ("small talk", "repeated questions", "not once per MCP connection"),
         ("host authorization", "verified, reusable", "memory_ingest", "check duplicates", "read suspected matches"),
         ("Never store guesses, transcripts, secrets", "memory_suggest", "Immutable is read-only"),
+        ("memory_feedback", "task", "evidence"),
     ],
 )
 def test_server_instructions_cover_the_shared_session_workflow(required):

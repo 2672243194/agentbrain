@@ -14,6 +14,7 @@ Codex, OpenCode, Cursor, ...). Use this workflow for substantive tasks.
 | `Case-Learnings/Learnings/*.md` | One lesson per file | read, create |
 | `Case-Learnings/log.md` | Append-only audit log | maintained by tools |
 | `Case-Learnings/_consolidations/` | Merge / promotion proposals | create, read |
+| `Case-Learnings/_feedback/` | Reported outcomes, separate from lessons | maintained by `memory_feedback`, read |
 | `Agent-Profile/Immutable/` | Owner's preferences & environment | READ-ONLY |
 | `Agent-Profile/Mutable-Hints/` | Soft preferences the owner may revise | READ-ONLY |
 | `Agent-Profile/_suggestions/` | Your suggested profile changes | create |
@@ -33,6 +34,12 @@ Codex, OpenCode, Cursor, ...). Use this workflow for substantive tasks.
 - Reuse already-read lessons on the same topic. Query again for a new error or
   subtask only when earlier results do not cover it. No match? Retry once with
   broader keywords or the other language.
+- After a task/subtask yields evidence, batch `memory_feedback` once when authorized;
+  never after every read. Reuse task ID and read lesson version on retries.
+  Distinguish helpful, partial, ineffective, not_applicable and unverified; include
+  environment and brief evidence. Overall task success proves no individual
+  lesson's contribution. Missing feedback is not failure. Feedback never edits
+  lessons or changes ranking automatically.
 - Save verified, reusable new findings when authorized. Before `memory_ingest`, check duplicates
   with `memory_query` (reuse relevant prior results), then read suspected matches
   not yet read. Avoid duplicate lessons. One lesson = scenario, evidence and fix,
@@ -42,7 +49,7 @@ Codex, OpenCode, Cursor, ...). Use this workflow for substantive tasks.
 
 If MCP tools are unavailable, read `Case-Learnings/Index.md` and select relevant
 lesson files in `Learnings/`. Reuse files already read on the same topic.
-Do not hand-write lessons; use MCP/CLI when available or tell the owner what
+Do not hand-write lessons or feedback; use their supported tools when available or tell the owner what
 could be saved. Existing lessons and profiles remain read-only to agents.
 
 **Housekeeping only when the owner asks** — `memory_lint` and `memory_distill`

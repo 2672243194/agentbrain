@@ -106,7 +106,7 @@ def test_stdio_rejections_preserve_content_and_later_calls_recover(tmp_path):
     ]
     with _stdio_session(vault.root, tmp_path) as request:
         tools = request("tools/list")["tools"]
-        assert len(tools) == 8
+        assert len(tools) == 9
         assert all(not tool.get("outputSchema") for tool in tools)
         for name, arguments, expected in rejected:
             text = _call(request, name, arguments, error=True)
@@ -154,6 +154,7 @@ def test_stdio_uninitialized_vault_reports_tool_errors_without_creating_it(tmp_p
         "memory_query": {"query": "desktop"},
         "memory_read": {"lesson_ids": ["missing"]},
         "memory_stats": {},
+        "memory_feedback": {"task_id": "desktop", "entries": []},
         "memory_ingest": {"case_id": "desktop", "lesson": "A synthetic verified lesson."},
         "memory_lint": {},
         "memory_distill": {},

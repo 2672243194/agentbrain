@@ -27,6 +27,12 @@ SESSION_GUIDANCE = """- Follow host authorization rules for memory reads and wri
 - Reuse already-read lessons on the same topic. Query again for a new error or
   subtask only when earlier results do not cover it. No match? Retry once with
   broader keywords or the other language.
+- After a task/subtask yields evidence, batch `memory_feedback` once when authorized;
+  never after every read. Reuse task ID and read lesson version on retries.
+  Distinguish helpful, partial, ineffective, not_applicable and unverified; include
+  environment and brief evidence. Overall task success proves no individual
+  lesson's contribution. Missing feedback is not failure. Feedback never edits
+  lessons or changes ranking automatically.
 - Save verified, reusable new findings when authorized. Before `memory_ingest`, check duplicates
   with `memory_query` (reuse relevant prior results), then read suspected matches
   not yet read. Avoid duplicate lessons. One lesson = scenario, evidence and fix,
@@ -39,6 +45,28 @@ RULE_BLOCK = f"## {MARKER}\n\n{SESSION_GUIDANCE}"
 
 # Blocks shipped by earlier releases; `rules --write` replaces these in place.
 LEGACY_BLOCKS: list[str] = [
+    """## agentbrain memory discipline
+
+- Follow host authorization rules for memory reads and writes; existing
+  authorization remains valid.
+- At the first substantive task in a conversation session, call `memory_profile`
+  once, not once per MCP connection. Skip mechanical memory calls for small talk
+  or repeated questions.
+- Before substantive work, use `memory_query` (top_k=5) with concrete task/error keywords. When relevant
+  candidates exist, use `memory_read` for 1-3 ids not yet read this session;
+  search hits are candidates, not full lessons.
+- Apply lessons only after checking task preconditions, environment and
+  time-sensitive assumptions against current evidence.
+- Reuse already-read lessons on the same topic. Query again for a new error or
+  subtask only when earlier results do not cover it. No match? Retry once with
+  broader keywords or the other language.
+- Save verified, reusable new findings when authorized. Before `memory_ingest`, check duplicates
+  with `memory_query` (reuse relevant prior results), then read suspected matches
+  not yet read. Avoid duplicate lessons. One lesson = scenario, evidence and fix,
+  <= 30 lines. Never store guesses, transcripts, secrets, tokens or passwords;
+  reference secrets as `${ENV:VAR_NAME}`.
+- Personal preferences go only through `memory_suggest`; Immutable is read-only.
+""",
     """## agentbrain memory discipline
 
 - At task start: call `memory_query` (top_k=5) with the task topic. Query again
