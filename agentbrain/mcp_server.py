@@ -3,6 +3,8 @@ from __future__ import annotations
 from inspect import signature
 import sys
 
+from pydantic import ValidationError
+
 try:  # mcp >= 2.0
     from mcp.server.mcpserver import MCPServer as _Server
     from mcp.server.mcpserver.exceptions import ToolError
@@ -19,10 +21,25 @@ from .vault import Vault, VaultNotInitialized
 
 SERVER_INSTRUCTIONS = "Use agentbrain's local Markdown memory for substantive work:\n\n" + SESSION_GUIDANCE
 
+
+class MemoryServer(_Server):
+    """Serve tool argument errors without including submitted values."""
+
+    async def call_tool(self, name, arguments, *args, **kwargs):
+        try:
+            return await super().call_tool(name, arguments, *args, **kwargs)
+        except ToolError as exc:
+            if isinstance(exc.__cause__, ValidationError):
+                raise ToolError(
+                    "Refused: invalid tool arguments; check required fields and types in inputSchema."
+                ) from None
+            raise
+
+
 if "instructions" in signature(_Server).parameters:
-    mcp = _Server("agentbrain", instructions=SERVER_INSTRUCTIONS)
+    mcp = MemoryServer("agentbrain", instructions=SERVER_INSTRUCTIONS)
 else:
-    mcp = _Server("agentbrain")
+    mcp = MemoryServer("agentbrain")
     print(
         "agentbrain: this MCP SDK does not support server instructions (available since 1.3.0); "
         "memory tools remain available, but session guidance requires client rules.",

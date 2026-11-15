@@ -114,7 +114,7 @@ def _full_lesson(lesson: Lesson, vault: Vault, heading: str) -> list[str]:
         age = _days_since(lesson.last_verified_at or lesson.created_at)
         if age is not None and age > 90:
             lines.append(f"STALE: last verified {age} days ago; revalidate before use.")
-    lines.extend(["", lesson.content.strip("\r\n"), ""])
+    lines.extend(["", lesson.content.replace("\r\n", "\n").strip("\r\n"), ""])
     return lines
 
 
@@ -165,7 +165,7 @@ def memory_query(
                 lines.append(f"Superseded: {current.lesson_id} -> {current.superseded_by}; call memory_read for the replacement.")
             else:
                 lines.extend(_full_lesson(current, v, f"{rank}. [{current.lesson_id}]"))
-        return "\n".join(lines).rstrip()
+        return "\n".join(lines).rstrip("\r\n")
 
     lines = [f"{len(hits)} lesson(s) matched (mode=index): use memory_read for relevant ids not read this session.", ""]
     for rank, (l, _score) in enumerate(hits, 1):
@@ -221,7 +221,7 @@ def _memory_read_result(
         lines.extend(_full_lesson(lesson, v, f"## [{lesson.lesson_id}]"))
     if missing:
         lines.append(f"Not found: {', '.join(missing)}")
-    return "\n".join(lines).rstrip(), (2 if not found else 1 if missing else 0)
+    return "\n".join(lines).rstrip("\r\n"), (2 if not found else 1 if missing else 0)
 
 
 def memory_stats(vault: Vault | None = None) -> str:
@@ -309,7 +309,7 @@ def memory_ingest(
         lesson_obj = v.new_lesson(
             case_id=case_id,
             source_summary=summary,
-            content=lesson.strip(),
+            content=lesson.strip("\r\n"),
             tags=tags,
             confidence=confidence,
         )

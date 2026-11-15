@@ -11,6 +11,19 @@ from .snapshot import Snapshot
 from .vault import Vault, VaultNotInitialized
 
 
+def _indexed_lesson_ids(text: str) -> set[str]:
+    """Read complete IDs from the lesson column of Markdown index rows."""
+    ids = set()
+    for line in text.splitlines():
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) < 5 or cells[:5] == ["lesson", "summary", "tags", "case", "verified"]:
+            continue
+        ids.add(cells[0])
+    return ids
+
+
 def _mcp_hint(vault_root: str) -> list[str]:
     args = ["-m", "agentbrain", "serve"]
     if sys.flags.isolated:
@@ -67,7 +80,8 @@ def doctor(vault: Vault | None = None) -> str:
     index_text = (
         vault.index_md.read_text(encoding="utf-8-sig") if vault.index_md.is_file() else ""
     )
-    missing = [l.lesson_id for l in active if l.lesson_id not in index_text]
+    indexed_ids = _indexed_lesson_ids(index_text)
+    missing = [l.lesson_id for l in active if l.lesson_id not in indexed_ids]
     if missing:
         problems.append(f"index is stale ({len(missing)} lesson(s) missing) — run: agentbrain index")
         lines.append(f"index: STALE — {len(missing)} lesson(s) missing")

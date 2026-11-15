@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1 — 2026-11-15
+
+- Preserve Markdown code indentation and trailing spaces through ingest and full reads, and normalize response line endings for Windows clients.
+- Return safe MCP parameter-validation errors without echoing submitted values while retaining actionable business refusals.
+- Check complete lesson IDs in the index column when reporting Vault health, avoiding false healthy results from similar IDs or summary mentions.
+
 ## 0.7.0 — 2026-10-29
 
 - Add batched, version-bound `memory_feedback` reports in separate Markdown files, with task-level deduplication, conflict refusal and credential checks; preserve lesson content, read counters and ranking.

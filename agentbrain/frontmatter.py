@@ -135,4 +135,5 @@ def dump(meta: dict, body: str) -> str:
     fm = yaml.safe_dump(meta, allow_unicode=True, sort_keys=False, default_flow_style=False)
     if not fm.endswith("\n"):
         fm += "\n"
-    return f"---\n{fm}---\n\n{body.strip()}\n"
+    body = body.replace("\r\n", "\n").strip("\r\n")
+    return f"---\n{fm}---\n\n{body}\n"

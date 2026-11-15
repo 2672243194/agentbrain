@@ -13,7 +13,7 @@ from agentbrain.vault import Vault
 
 
 @contextmanager
-def stdio(root, cwd):
+def stdio(root, cwd, diagnostics=None):
     with tempfile.TemporaryFile() as stderr, subprocess.Popen(
         [sys.executable, "-I", "-m", "agentbrain", "serve"],
         env=dict(os.environ, AGENTBRAIN_VAULT=str(root)), cwd=cwd,
@@ -56,7 +56,10 @@ def stdio(root, cwd):
                 process.kill()
                 process.wait(timeout=5)
         stderr.seek(0)
-        assert process.returncode == 0, stderr.read().decode("utf-8", errors="replace")
+        output = stderr.read().decode("utf-8", errors="replace")
+        if diagnostics is not None:
+            diagnostics.append(output)
+        assert process.returncode == 0, output
 
 
 def call(request, name, arguments, *, error=False):
